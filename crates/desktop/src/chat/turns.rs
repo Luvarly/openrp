@@ -59,7 +59,11 @@ pub(super) fn turn(entries: &[Entry], index: usize) -> Range<usize> {
     }
     let index = index.min(entries.len() - 1);
     let start = entries[..=index].iter().rposition(|e| e.message.role == Role::User).unwrap_or(0);
-    let end = entries.iter().skip(start + 1).position(|e| e.message.role == Role::User).map_or(entries.len(), |i| start + 1 + i);
+    let end = entries
+        .iter()
+        .skip(start + 1)
+        .position(|e| e.message.role == Role::User)
+        .map_or(entries.len(), |i| start + 1 + i);
     start..end
 }
 
@@ -72,7 +76,10 @@ pub(super) fn anchor(entries: &[Entry], turn: &Range<usize>) -> usize {
 /// Whether a reply can be edited: model output, shown, not a summary.
 fn editable(entry: &Entry) -> bool {
     let message = &entry.message;
-    message.role == Role::Assistant && !message.failed && !message.compaction && (!message.content.is_empty() || !message.tool_calls.is_empty())
+    message.role == Role::Assistant
+        && !message.failed
+        && !message.compaction
+        && (!message.content.is_empty() || !message.tool_calls.is_empty())
 }
 
 /// Whether the turn has replies to edit.
@@ -126,14 +133,17 @@ impl Conversation {
             return None;
         }
         let first = &self.entries.first()?.message;
-        let whole = first.role == Role::Assistant && !first.swipes.is_empty() && first.swipes.iter().all(|s| s.len() == 1);
+        let whole =
+            first.role == Role::Assistant && !first.swipes.is_empty() && first.swipes.iter().all(|s| s.len() == 1);
         whole.then(|| (first.swipe.min(first.swipes.len()), first.swipes.len() + 1))
     }
 }
 
 /// Whether `replies` showed the user anything worth swiping back to.
 fn worth_keeping(replies: &[StoredMessage]) -> bool {
-    replies.iter().any(|m| m.role == Role::Assistant && !m.failed && !m.compaction && (!m.content.is_empty() || !m.tool_calls.is_empty()))
+    replies.iter().any(|m| {
+        m.role == Role::Assistant && !m.failed && !m.compaction && (!m.content.is_empty() || !m.tool_calls.is_empty())
+    })
 }
 
 impl Chat {
@@ -192,7 +202,8 @@ impl Chat {
             // The slots of one reply are next to each other.
             let id = edit.slots[done].entry;
             let end = edit.slots[done..].iter().position(|s| s.entry != id).map_or(edit.slots.len(), |n| done + n);
-            let fields: Vec<(&Slot, &str)> = (done..end).map(|k| (&edit.slots[k], edit.fields.text(k).trim())).collect();
+            let fields: Vec<(&Slot, &str)> =
+                (done..end).map(|k| (&edit.slots[k], edit.fields.text(k).trim())).collect();
             done = end;
             let Some(index) = conversation.entries.iter().position(|e| e.id == id) else { continue };
             if fields.iter().all(|(slot, text)| slot.text == *text) {
@@ -209,7 +220,8 @@ impl Chat {
             }
             let message = &mut conversation.entries[index].message;
             if fields[0].0.character.is_some() {
-                let said: Vec<(&str, &str)> = fields.iter().filter_map(|(slot, text)| Some((slot.character.as_deref()?, *text))).collect();
+                let said: Vec<(&str, &str)> =
+                    fields.iter().filter_map(|(slot, text)| Some((slot.character.as_deref()?, *text))).collect();
                 tools::respeak(&mut message.tool_calls, &said);
                 message.content.clear();
             } else {
@@ -340,7 +352,9 @@ impl Chat {
         if start == 0 {
             // The title came from the first prompt.
             let first = conversation.entries.iter().find(|e| e.message.role == Role::User);
-            conversation.title = first.map(|e| e.message.content.lines().next().unwrap_or_default().chars().take(80).collect()).unwrap_or_default();
+            conversation.title = first
+                .map(|e| e.message.content.lines().next().unwrap_or_default().chars().take(80).collect())
+                .unwrap_or_default();
         }
         actions.push(Action::SaveSession(conversation.to_session()));
         self.selection = None;
@@ -376,8 +390,13 @@ mod tests {
         let mut actions = Vec::new();
         chat.send(&mut actions);
         let Some(Action::Send(job)) = actions.pop() else { panic!("not sent") };
-        let call = ToolCall { call_id: format!("c{}", job.stream), name: super::super::tools::SPEAK.into(), arguments: args.into() };
-        let completion = Completion { tool_calls: vec![call], usage: openrp_core::Usage::new(10, 5), ..Completion::default() };
+        let call = ToolCall {
+            call_id: format!("c{}", job.stream),
+            name: super::super::tools::SPEAK.into(),
+            arguments: args.into(),
+        };
+        let completion =
+            Completion { tool_calls: vec![call], usage: openrp_core::Usage::new(10, 5), ..Completion::default() };
         chat.stream_event(job.conversation, job.stream, StreamEvent::Completed(completion));
         chat.stream_end(job.conversation, job.stream, Ok(true), &mut Vec::new());
         job
@@ -390,10 +409,8 @@ mod tests {
         chat
     }
 
-    const RUE: &str =
-        r#"{"scene":"The woods.","introduce":[{"name":"Rue","description":"A girl from 11."}],"lines":[{"character":"Rue","text":"Hi."}]}"#;
-    const THRESH: &str =
-        r#"{"scene":"The lake.","introduce":[{"name":"Thresh","description":"Big."}],"lines":[{"character":"Thresh","text":"Yes?"}]}"#;
+    const RUE: &str = r#"{"scene":"The woods.","introduce":[{"name":"Rue","description":"A girl from 11."}],"lines":[{"character":"Rue","text":"Hi."}]}"#;
+    const THRESH: &str = r#"{"scene":"The lake.","introduce":[{"name":"Thresh","description":"Big."}],"lines":[{"character":"Thresh","text":"Yes?"}]}"#;
     const LEAVES: &str = r#"{"scene":"The lake.","lines":[{"character":"Rue","text":"Bye."}],"leave":["Rue"]}"#;
 
     #[test]
@@ -444,8 +461,13 @@ mod tests {
 
     /// Completes `job` with a speak call of `args`.
     fn complete(chat: &mut Chat, job: &SendJob, args: &str) {
-        let call = ToolCall { call_id: format!("c{}", job.stream), name: super::super::tools::SPEAK.into(), arguments: args.into() };
-        let completion = Completion { tool_calls: vec![call], usage: openrp_core::Usage::new(10, 5), ..Completion::default() };
+        let call = ToolCall {
+            call_id: format!("c{}", job.stream),
+            name: super::super::tools::SPEAK.into(),
+            arguments: args.into(),
+        };
+        let completion =
+            Completion { tool_calls: vec![call], usage: openrp_core::Usage::new(10, 5), ..Completion::default() };
         chat.stream_event(job.conversation, job.stream, StreamEvent::Completed(completion));
         chat.stream_end(job.conversation, job.stream, Ok(true), &mut Vec::new());
     }
@@ -471,7 +493,9 @@ mod tests {
         let conversation = chat.current();
         assert_eq!(conversation.swipes(), Some((0, 0, 2)));
         assert!(conversation.scene == "The woods." && conversation.cast.iter().map(|m| m.name.as_str()).eq(["Rue"]));
-        assert!(matches!(&actions[..], [Action::SaveSession(s)] if s.messages[0].swipes.len() == 1 && s.messages.len() == 2));
+        assert!(
+            matches!(&actions[..], [Action::SaveSession(s)] if s.messages[0].swipes.len() == 1 && s.messages.len() == 2)
+        );
         let entry = conversation.entries.last_mut().unwrap();
         entry.refresh_display(false, true);
         assert!(entry.display.ends_with("**Rue**: Hi."), "{}", entry.display);
@@ -514,7 +538,8 @@ mod tests {
         answer(&mut chat, "Hello.", two);
         chat.edit_turn(0);
         let edit = chat.turn_edit().expect("editing");
-        let texts: Vec<(Option<&str>, &str)> = edit.slots.iter().map(|s| (s.character.as_deref(), s.text.as_str())).collect();
+        let texts: Vec<(Option<&str>, &str)> =
+            edit.slots.iter().map(|s| (s.character.as_deref(), s.text.as_str())).collect();
         assert_eq!(texts, [(Some("Rue"), "Hi."), (Some("Thresh"), "*nods*")], "a field per character");
         edit.fields.insert(" Changed.");
         let mut actions = Vec::new();
@@ -522,12 +547,22 @@ mod tests {
         let prompt = chat.current().entries[0].message.clone();
         let entry = &mut chat.current().entries[1];
         entry.refresh_display(false, true);
-        assert_eq!(entry.display, "*The woods.*\n\n*Rue joins the story*\n\n*Thresh joins the story*\n\n**Rue**: Hi. Changed.\n\n**Thresh**: *nods*", "still bubbles");
+        assert_eq!(
+            entry.display,
+            "*The woods.*\n\n*Rue joins the story*\n\n*Thresh joins the story*\n\n**Rue**: Hi. Changed.\n\n**Thresh**: *nods*",
+            "still bubbles"
+        );
         let reply = &entry.message;
-        assert!(reply.content.is_empty() && reply.tool_calls.len() == 1 && reply.change.is_some(), "deleting it still undoes what it did");
+        assert!(
+            reply.content.is_empty() && reply.tool_calls.len() == 1 && reply.change.is_some(),
+            "deleting it still undoes what it did"
+        );
         assert!(matches!(&actions[..], [Action::SaveSession(_)]));
         let items = crate::chat::stream::input_items(&[prompt, reply.clone()]);
-        assert!(matches!(&items[1], openrp_core::InputItem::ToolCall(call) if call.arguments.contains("Hi. Changed.")), "the model sees the edit");
+        assert!(
+            matches!(&items[1], openrp_core::InputItem::ToolCall(call) if call.arguments.contains("Hi. Changed.")),
+            "the model sees the edit"
+        );
 
         // An emptied character leaves the reply; emptied entirely, it is removed.
         chat.edit_turn(1);
@@ -555,6 +590,9 @@ mod tests {
         edit.fields.insert(" Again.");
         chat.save_turn_edit(&mut Vec::new());
         let reply = &chat.current().entries[1].message;
-        assert!(reply.content.is_empty() && reply.tool_calls[0].call.arguments.contains("*waves* Hi. Again."), "now a call");
+        assert!(
+            reply.content.is_empty() && reply.tool_calls[0].call.arguments.contains("*waves* Hi. Again."),
+            "now a call"
+        );
     }
 }

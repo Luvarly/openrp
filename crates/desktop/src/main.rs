@@ -110,7 +110,9 @@ fn main() -> ExitCode {
     // Two copies would write the same files over each other.
     let _lock = match openrp_core::lock_instance(LOCK_FILE) {
         Ok(Some(lock)) => Some(lock),
-        Ok(None) => return fail("OpenRP is already running. Switch to its window, or close it before starting it again."),
+        Ok(None) => {
+            return fail("OpenRP is already running. Switch to its window, or close it before starting it again.");
+        }
         Err(e) => {
             log::error(format!("cannot take the instance lock, running without it: {e}"));
             None

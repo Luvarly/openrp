@@ -17,7 +17,9 @@ const RT_GROUP_ICON: u16 = 14;
 
 fn main() {
     println!("cargo:rerun-if-changed=assets/icon");
-    if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") || env::var("CARGO_CFG_TARGET_ENV").as_deref() != Ok("msvc") {
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows")
+        || env::var("CARGO_CFG_TARGET_ENV").as_deref() != Ok("msvc")
+    {
         // ponytail: MSVC only; the GNU linker needs the .res turned into a COFF object (windres) first.
         return;
     }

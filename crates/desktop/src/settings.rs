@@ -9,8 +9,8 @@ use crate::chat::{ReasoningView, format_cost, group_digits};
 use crate::paint::{Painter, Rect, fade, mix};
 use crate::provider::ProviderForm;
 use crate::text::{Align, Style};
-use crate::ui::chevron;
 use crate::theme::{self, Palette, Scheme};
+use crate::ui::chevron;
 use crate::ui::{ButtonStyle, Ui, button, id, keycap};
 
 /// Widest the settings column gets.
@@ -76,7 +76,13 @@ pub struct SettingsView {
 
 impl Default for SettingsView {
     fn default() -> Self {
-        Self { tab: Tab::default(), scroll: 0.0, content_h: 0.0, provider: Provider::default(), form: ProviderForm::new("", false) }
+        Self {
+            tab: Tab::default(),
+            scroll: 0.0,
+            content_h: 0.0,
+            provider: Provider::default(),
+            form: ProviderForm::new("", false),
+        }
     }
 }
 
@@ -88,7 +94,13 @@ impl SettingsView {
     }
 
     /// Keyboard input for the provider form, on its tab.
-    pub fn key(&mut self, event: &KeyEvent, mods: ModifiersState, cb: &mut Option<Clipboard>, actions: &mut Vec<Action>) {
+    pub fn key(
+        &mut self,
+        event: &KeyEvent,
+        mods: ModifiersState,
+        cb: &mut Option<Clipboard>,
+        actions: &mut Vec<Action>,
+    ) {
         if self.tab == Tab::Provider && self.form.key(event, mods, cb) {
             self.connect(actions);
         }
@@ -224,7 +236,12 @@ impl SettingsView {
                 let form_h = self.form.height(p, inner);
                 let card = Rect::new(x, y, width, 68.0 + form_h + 20.0 + 30.0 + 16.0);
                 p.bordered(card, t.surface, theme::RADIUS, 1.0, t.border);
-                setting_row(p, card, "OpenAI-compatible API", "Any provider or local server that speaks Chat Completions.");
+                setting_row(
+                    p,
+                    card,
+                    "OpenAI-compatible API",
+                    "Any provider or local server that speaks Chat Completions.",
+                );
                 self.form.draw(p, ui, card.x + 16.0, card.y + 68.0, inner);
                 let buttons_y = card.y + 68.0 + form_h + 20.0;
                 let save = Rect::new(card.right() - 16.0 - 120.0, buttons_y, 120.0, 30.0);
@@ -397,7 +414,11 @@ fn preview(p: &mut Painter, r: Rect, c: &Palette) {
     p.rect(Rect::new(side.x + 4.0, side.y + 17.0, side.w - 8.0, 10.0), c.active, 2.0);
     for (i, w) in [0.5, 0.7, 0.55, 0.62, 0.45].into_iter().enumerate() {
         let alpha = if i == 1 { 0.9 } else { 0.45 };
-        p.rect(Rect::new(side.x + 7.0, side.y + 8.0 + i as f32 * 10.0, (side.w - 14.0) * w, 3.0), fade(c.text_muted, alpha), 1.5);
+        p.rect(
+            Rect::new(side.x + 7.0, side.y + 8.0 + i as f32 * 10.0, (side.w - 14.0) * w, 3.0),
+            fade(c.text_muted, alpha),
+            1.5,
+        );
     }
 
     // Chat: a prompt box, reply lines and the composer with its send button.

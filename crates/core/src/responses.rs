@@ -194,7 +194,12 @@ impl Client {
     /// # Errors
     /// Network failures, non-success statuses, and failures reported inside
     /// the stream ([`Error::Response`]).
-    pub fn stream_response(&self, request: &ResponseRequest<'_>, cancel: &AtomicBool, mut on_event: impl FnMut(StreamEvent)) -> Result<bool> {
+    pub fn stream_response(
+        &self,
+        request: &ResponseRequest<'_>,
+        cancel: &AtomicBool,
+        mut on_event: impl FnMut(StreamEvent),
+    ) -> Result<bool> {
         crate::completions::stream(self, request, cancel, &mut on_event)
     }
 }
@@ -262,7 +267,10 @@ fn read_line(reader: &mut impl BufRead, buffer: &mut Vec<u8>) -> Result<Option<S
 
 /// The error for a stream sending more than we accept in one `what`.
 fn too_large(what: &str) -> Error {
-    Error::Response { code: Some("stream_too_large".into()), message: format!("The response stream sent an oversized {what}.") }
+    Error::Response {
+        code: Some("stream_too_large".into()),
+        message: format!("The response stream sent an oversized {what}."),
+    }
 }
 
 #[cfg(test)]

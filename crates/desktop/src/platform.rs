@@ -95,7 +95,16 @@ pub fn alert(title: &str, message: &str) {
     {
         // The text goes in as arguments, never into the script itself.
         let mut command = Command::new("osascript");
-        command.args(["-e", "on run argv", "-e", "display alert (item 1 of argv) message (item 2 of argv) as critical", "-e", "end run", title, message]);
+        command.args([
+            "-e",
+            "on run argv",
+            "-e",
+            "display alert (item 1 of argv) message (item 2 of argv) as critical",
+            "-e",
+            "end run",
+            title,
+            message,
+        ]);
         let _ = command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
     }
     #[cfg(all(unix, not(target_os = "macos")))]
@@ -121,7 +130,12 @@ fn wide(s: &str) -> Vec<u16> {
 fn run_picker(mut command: Command) -> io::Result<Vec<String>> {
     let output = no_window(&mut command).stdin(Stdio::null()).stderr(Stdio::null()).output()?;
     // A cancelled dialog exits non-zero or prints nothing; both mean "none".
-    Ok(String::from_utf8_lossy(&output.stdout).lines().map(str::trim).filter(|l| !l.is_empty()).map(str::to_owned).collect())
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(str::to_owned)
+        .collect())
 }
 
 /// PowerShell prelude: an invisible topmost owner so the dialog appears in
@@ -194,7 +208,11 @@ pub fn pick_files(title: &str, (kind, extensions): Filter<'_>, multiple: bool) -
     } else {
         let patterns: Vec<String> = extensions.iter().map(|e| format!("*.{e}")).collect();
         let mut command = Command::new("zenity");
-        command.args(["--file-selection", &format!("--title={title}"), &format!("--file-filter={kind} | {}", patterns.join(" "))]);
+        command.args([
+            "--file-selection",
+            &format!("--title={title}"),
+            &format!("--file-filter={kind} | {}", patterns.join(" ")),
+        ]);
         if multiple {
             command.args(["--multiple", "--separator=\n"]);
         }
@@ -256,7 +274,8 @@ fn uti(extension: &str) -> &'static str {
 /// `name` as a file name every platform accepts: no path separators or
 /// reserved characters, not too long, never empty.
 fn file_name(name: &str) -> String {
-    let safe: String = name.chars().map(|c| if c.is_control() || "<>:\"/\\|?*".contains(c) { ' ' } else { c }).take(80).collect();
+    let safe: String =
+        name.chars().map(|c| if c.is_control() || "<>:\"/\\|?*".contains(c) { ' ' } else { c }).take(80).collect();
     // Words of only dots (`..`) go: no climbing out of the folder.
     let words: Vec<&str> = safe.split_whitespace().filter(|w| !w.chars().all(|c| c == '.')).collect();
     let safe = words.join(" ");

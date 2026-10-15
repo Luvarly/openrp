@@ -228,7 +228,11 @@ fn delimiter_row(line: &str) -> Option<Vec<Align>> {
 /// Whether `line` would start a block other than a paragraph.
 fn starts_block(line: &str) -> bool {
     let trimmed = line.trim_start();
-    fence(trimmed).is_some() || heading(trimmed).is_some() || trimmed.starts_with('>') || is_rule(trimmed) || list_marker(line).is_some()
+    fence(trimmed).is_some()
+        || heading(trimmed).is_some()
+        || trimmed.starts_with('>')
+        || is_rule(trimmed)
+        || list_marker(line).is_some()
 }
 
 /// Deepest quote/list nesting parsed as structure; deeper input stays text so
@@ -490,7 +494,11 @@ fn inline_into(src: &str, mark: Mark, out: &mut Inline, depth: usize) {
                 find_backticks(src, i + run, run).map(|end| {
                     push_text(out, &src[plain..i], mark);
                     let code = &src[i + run..end];
-                    let code = if code.len() > 2 && code.starts_with(' ') && code.ends_with(' ') { &code[1..code.len() - 1] } else { code };
+                    let code = if code.len() > 2 && code.starts_with(' ') && code.ends_with(' ') {
+                        &code[1..code.len() - 1]
+                    } else {
+                        code
+                    };
                     push_text(out, code, Mark { code: true, ..mark });
                     end + run
                 })
@@ -517,12 +525,16 @@ fn inline_into(src: &str, mark: Mark, out: &mut Inline, depth: usize) {
                 inline_into(text, linked, out, depth + 1);
                 end
             }),
-            b'<' => src[i + 1..].find('>').map(|n| &src[i + 1..i + 1 + n]).filter(|u| bare_url(u, 0) == Some(u.len())).map(|url| {
-                push_text(out, &src[plain..i], mark);
-                let linked = with_link(out, mark, url);
-                push_text(out, url, linked);
-                i + url.len() + 2
-            }),
+            b'<' => {
+                src[i + 1..].find('>').map(|n| &src[i + 1..i + 1 + n]).filter(|u| bare_url(u, 0) == Some(u.len())).map(
+                    |url| {
+                        push_text(out, &src[plain..i], mark);
+                        let linked = with_link(out, mark, url);
+                        push_text(out, url, linked);
+                        i + url.len() + 2
+                    },
+                )
+            }
             b'h' => bare_url(src, i).map(|len| {
                 push_text(out, &src[plain..i], mark);
                 let url = &src[i..i + len];
@@ -615,7 +627,8 @@ mod tests {
 
     #[test]
     fn blocks() {
-        let doc = parse("# Title #\n\nPara one\nline two\n\n---\n> quoted\n> more\n\n```Rust extra\nfn main() {}\n\n```\n");
+        let doc =
+            parse("# Title #\n\nPara one\nline two\n\n---\n> quoted\n> more\n\n```Rust extra\nfn main() {}\n\n```\n");
         assert_eq!(doc.len(), 5);
         assert!(matches!(&doc[0], Block::Heading { level: 1, text } if text.text == "Title"));
         assert!(matches!(&doc[1], Block::Paragraph(p) if p.text == "Para one\nline two"));
@@ -632,10 +645,14 @@ mod tests {
     #[test]
     fn nested_lists_and_tasks() {
         let doc = parse("1. one\n2. two\n   - inner a\n   - [x] inner b\n     continued\n3. three\n\nafter");
-        let [Block::List { start: Some(1), items }, Block::Paragraph(after)] = doc.as_slice() else { panic!("{doc:?}") };
+        let [Block::List { start: Some(1), items }, Block::Paragraph(after)] = doc.as_slice() else {
+            panic!("{doc:?}")
+        };
         assert_eq!(after.text, "after");
         assert_eq!(items.len(), 3);
-        let [Block::Paragraph(two), Block::List { start: None, items: inner }] = items[1].blocks.as_slice() else { panic!() };
+        let [Block::Paragraph(two), Block::List { start: None, items: inner }] = items[1].blocks.as_slice() else {
+            panic!()
+        };
         assert_eq!(two.text, "two");
         assert_eq!(inner[1].task, Some(true));
         assert!(matches!(&inner[1].blocks[0], Block::Paragraph(p) if p.text == "inner b\ncontinued"));

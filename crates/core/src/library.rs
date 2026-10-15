@@ -192,13 +192,15 @@ impl LoreEntry {
 /// ASCII letter or digit at its edges, except a plural ending (`s`, `es`,
 /// `'s`) after it.
 fn whole_word(text: &str, start: usize, end: usize) -> bool {
-    let (word, joined) = (|c: char| c.is_ascii_alphanumeric(), |s: &str| s.chars().next().is_some_and(char::is_alphanumeric));
+    let (word, joined) =
+        (|c: char| c.is_ascii_alphanumeric(), |s: &str| s.chars().next().is_some_and(char::is_alphanumeric));
     let found = &text[start..end];
     if found.chars().next().is_some_and(word) && text[..start].chars().next_back().is_some_and(char::is_alphanumeric) {
         return false;
     }
     let after = &text[end..];
-    !found.chars().next_back().is_some_and(word) || ["", "s", "es", "'s"].iter().any(|ending| after.strip_prefix(ending).is_some_and(|rest| !joined(rest)))
+    !found.chars().next_back().is_some_and(word)
+        || ["", "s", "es", "'s"].iter().any(|ending| after.strip_prefix(ending).is_some_and(|rest| !joined(rest)))
 }
 
 /// For `skip_serializing_if`.
@@ -416,7 +418,12 @@ impl Portraits {
         let mut deleted = 0;
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
-            let old = entry.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age > grace);
+            let old = entry
+                .metadata()
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| t.elapsed().ok())
+                .is_some_and(|age| age > grace);
             // Only the app's own files: anything else in the folder stays.
             if old && !keep.contains(&name) && self.path(&name).is_some() && fs::remove_file(entry.path()).is_ok() {
                 deleted += 1;
@@ -464,7 +471,8 @@ mod tests {
 
     #[test]
     fn lore_is_found_by_whole_words() {
-        let entry = |keys: &[&str]| LoreEntry { keys: keys.iter().map(|k| (*k).to_owned()).collect(), ..LoreEntry::default() };
+        let entry =
+            |keys: &[&str]| LoreEntry { keys: keys.iter().map(|k| (*k).to_owned()).collect(), ..LoreEntry::default() };
         let text = "the dragons of valyria. a cat's toy, 龍が来た.";
         assert!(entry(&["Dragon"]).mentioned_in(text), "plural, any case");
         assert!(entry(&["valyria"]).mentioned_in(text) && entry(&["cat"]).mentioned_in(text));
@@ -481,8 +489,14 @@ mod tests {
         let library = Library::at(dir.clone());
         assert!(library.list::<World>().unwrap().0.is_empty(), "a missing folder is empty");
 
-        let world =
-            World { id: "w1".into(), name: "Panem".into(), description: "Twelve districts.".into(), created: 1, updated: 2, ..World::default() };
+        let world = World {
+            id: "w1".into(),
+            name: "Panem".into(),
+            description: "Twelve districts.".into(),
+            created: 1,
+            updated: 2,
+            ..World::default()
+        };
         library.save(&world.id, &world).unwrap();
         fs::write(dir.join("broken.json"), "{").unwrap();
         fs::write(dir.join("notes.txt"), "ignored").unwrap();

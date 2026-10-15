@@ -46,7 +46,8 @@ impl ProviderForm {
     pub fn new(base_url: &str, key_saved: bool) -> Self {
         let mut url = Editor::default();
         url.insert(base_url);
-        let key_hint = if key_saved { "Saved. Type a new key to replace it." } else { "Leave empty if the server needs none" };
+        let key_hint =
+            if key_saved { "Saved. Type a new key to replace it." } else { "Leave empty if the server needs none" };
         Self { fields: Fields::new([url, Editor::default()], [false, false]), key_hint, error: None }
     }
 
@@ -79,7 +80,9 @@ impl ProviderForm {
         let url = url.strip_suffix("/chat/completions").unwrap_or(url);
         let host = url.strip_prefix("https://").or_else(|| url.strip_prefix("http://")).unwrap_or_default();
         if host.is_empty() || url.contains(char::is_whitespace) {
-            self.error = Some("Enter the API's address, starting with https:// (or http:// for a server on this computer).".into());
+            self.error = Some(
+                "Enter the API's address, starting with https:// (or http:// for a server on this computer).".into(),
+            );
             return None;
         }
         // Keys pasted with a line break would make an invalid header.
@@ -111,7 +114,9 @@ impl ProviderForm {
         }
         y += PRESET_H + GAP;
         let [url, key] = self.layouts(p, width);
-        for (index, label, hint, (layout, h)) in [(URL, "Base URL", "https://…/v1", url), (KEY, "API key", self.key_hint, key)] {
+        for (index, label, hint, (layout, h)) in
+            [(URL, "Base URL", "https://…/v1", url), (KEY, "API key", self.key_hint, key)]
+        {
             p.label(label, theme::LABEL, x, y, t.text);
             y += LABEL_H;
             self.fields.draw(index, p, ui, Rect::new(x, y, width, h), layout, hint, true);
@@ -146,7 +151,10 @@ mod tests {
         form.fields.focus(KEY);
         form.insert(" sk-or\n-v1 ");
         assert_eq!(form.submit(), Some(("https://openrouter.ai/api/v1".into(), Some("sk-or-v1".into()))));
-        assert_eq!(ProviderForm::new("http://localhost:11434/v1", false).submit(), Some(("http://localhost:11434/v1".into(), None)));
+        assert_eq!(
+            ProviderForm::new("http://localhost:11434/v1", false).submit(),
+            Some(("http://localhost:11434/v1".into(), None))
+        );
         for bad in ["", "openrouter.ai", "https://", "ftp://x", "https://a b"] {
             let mut form = ProviderForm::new(bad, false);
             assert!(form.submit().is_none() && form.error.is_some(), "{bad}");

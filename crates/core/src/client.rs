@@ -206,7 +206,8 @@ mod tests {
         let json = r#"{"id":"m","input_cost_per_million":2,"output_cost_per_million":10,
             "cache_read_cost_per_million":0.2,"cache_write_cost_per_million":2.5,"context_window":1000000}"#;
         let cached: Model = serde_json::from_str(json).unwrap();
-        let usage = Usage { input_tokens: 1_000_000, output_tokens: 0, cached_tokens: 600_000, cache_write_tokens: 100_000 };
+        let usage =
+            Usage { input_tokens: 1_000_000, output_tokens: 0, cached_tokens: 600_000, cache_write_tokens: 100_000 };
         assert!((cached.cost(usage) - (0.6 + 0.12 + 0.25)).abs() < 1e-9);
         assert_eq!(cached.context_window, 1_000_000);
     }

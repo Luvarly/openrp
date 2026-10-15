@@ -116,7 +116,9 @@ impl Face {
                     continue;
                 };
                 let found = match pair {
-                    PairAdjustment::Format1 { coverage, sets } => coverage.get(l).and_then(|set| sets.get(set)).and_then(|set| set.get(r)),
+                    PairAdjustment::Format1 { coverage, sets } => {
+                        coverage.get(l).and_then(|set| sets.get(set)).and_then(|set| set.get(r))
+                    }
                     PairAdjustment::Format2 { coverage, classes, matrix } => {
                         coverage.contains(l).then(|| matrix.get((classes.0.get(l), classes.1.get(r)))).flatten()
                     }
@@ -131,7 +133,10 @@ impl Face {
 
     fn kern_table(&self, left: u16, right: u16) -> Option<i16> {
         let kern = self.inner.tables().kern?;
-        kern.subtables.into_iter().filter(|s| s.horizontal && !s.variable).find_map(|s| s.glyphs_kerning(GlyphId(left), GlyphId(right)))
+        kern.subtables
+            .into_iter()
+            .filter(|s| s.horizontal && !s.variable)
+            .find_map(|s| s.glyphs_kerning(GlyphId(left), GlyphId(right)))
     }
 
     /// The longest GSUB ligature starting at `glyphs[0]`, as the ligature
@@ -153,7 +158,8 @@ impl Face {
                 };
                 for ligature in set {
                     let len = usize::from(ligature.components.len()) + 1;
-                    let matches = len <= glyphs.len() && ligature.components.into_iter().zip(&glyphs[1..]).all(|(component, &g)| component.0 == g);
+                    let matches = len <= glyphs.len()
+                        && ligature.components.into_iter().zip(&glyphs[1..]).all(|(component, &g)| component.0 == g);
                     if matches && best.is_none_or(|(_, n)| len > n) {
                         best = Some((ligature.glyph.0, len));
                     }
@@ -277,7 +283,10 @@ fn system_fallbacks() -> Vec<Fallback> {
             ),
             fallback(&["/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc#0"], is_cjk),
             fallback(&["/System/Library/Fonts/AppleSDGothicNeo.ttc#0"], is_hangul),
-            fallback(&["/System/Library/Fonts/Supplemental/Arial Unicode.ttf", "/Library/Fonts/Arial Unicode.ttf"], |_| true),
+            fallback(
+                &["/System/Library/Fonts/Supplemental/Arial Unicode.ttf", "/Library/Fonts/Arial Unicode.ttf"],
+                |_| true,
+            ),
             fallback(&["/System/Library/Fonts/Apple Symbols.ttf"], not_cjk),
         ]
     } else {
@@ -304,7 +313,11 @@ fn system_fallbacks() -> Vec<Fallback> {
                 not_cjk,
             ),
             fallback(
-                &["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/TTF/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf"],
+                &[
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                    "/usr/share/fonts/TTF/DejaVuSans.ttf",
+                    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+                ],
                 not_cjk,
             ),
         ]
@@ -356,7 +369,10 @@ impl Fonts {
     /// Inter Regular rather than panicking.
     pub fn face(&self, id: FontId) -> &Face {
         let index = usize::from(id.0);
-        self.embedded.get(index).or_else(|| self.fallbacks.get(index - FontId::EMBEDDED)?.face.get()?.as_ref()).unwrap_or(&self.embedded[0])
+        self.embedded
+            .get(index)
+            .or_else(|| self.fallbacks.get(index - FontId::EMBEDDED)?.face.get()?.as_ref())
+            .unwrap_or(&self.embedded[0])
     }
 
     /// Picks the face and glyph for `c`, preferring `primary`. `next` is the

@@ -65,7 +65,9 @@ impl TextPiece {
     fn rect(&self, scroll: f32) -> Rect {
         let w = self.layout.width().max(4.0);
         match self.code {
-            Some((_, window)) => Rect::new(self.x, self.y, (w - scroll).min(window - 2.0 * CODE_PAD), self.layout.height()),
+            Some((_, window)) => {
+                Rect::new(self.x, self.y, (w - scroll).min(window - 2.0 * CODE_PAD), self.layout.height())
+            }
             None => Rect::new(self.x, self.y, w, self.layout.height()),
         }
     }
@@ -175,7 +177,15 @@ impl Doc {
         let layout = TextLayout::new(fonts, text, style, Some(width), scale);
         let height = layout.height();
         Self {
-            texts: vec![TextPiece { x: 0.0, y: 0.0, layout, text: text.to_owned(), sep: "", links: Vec::new(), code: None }],
+            texts: vec![TextPiece {
+                x: 0.0,
+                y: 0.0,
+                layout,
+                text: text.to_owned(),
+                sep: "",
+                links: Vec::new(),
+                code: None,
+            }],
             height,
             key: (width.to_bits(), scale.to_bits()),
             ..Self::default()
@@ -198,7 +208,13 @@ impl Doc {
     }
 
     /// [`Doc::markdown`] with `inks` for plain and emphasised text.
-    fn build(fonts: &Fonts, src: &str, (width, scale): (f32, f32), (base_ink, emphasis_ink): (u8, u8), mut previous: Option<Self>) -> Self {
+    fn build(
+        fonts: &Fonts,
+        src: &str,
+        (width, scale): (f32, f32),
+        (base_ink, emphasis_ink): (u8, u8),
+        mut previous: Option<Self>,
+    ) -> Self {
         let blocks = markdown::parse(src);
         let key = (width.to_bits(), scale.to_bits());
         let mut b = Builder { fonts, scale, texts: Vec::new(), decos: Vec::new(), codes: 0, emphasis_ink };
@@ -206,7 +222,8 @@ impl Doc {
         let mut y = 0.0;
         let mut reused = 0;
         // Code blocks keep their scroll while a reply streams in.
-        let (mut code_scroll, code_drag) = previous.as_mut().map(|p| (std::mem::take(&mut p.code_scroll), p.code_drag)).unwrap_or_default();
+        let (mut code_scroll, code_drag) =
+            previous.as_mut().map(|p| (std::mem::take(&mut p.code_scroll), p.code_drag)).unwrap_or_default();
         if let Some(prev) = previous.filter(|p| p.key == key) {
             reused = prev.blocks.iter().zip(&blocks).take_while(|(a, b)| a == b).count();
             // The last reused block's end marks where rebuilding resumes.
@@ -256,8 +273,11 @@ impl Doc {
             dy * 4.0 + dx
         };
         let rect = |piece: &TextPiece| piece.rect(self.scroll_of(piece));
-        let (index, piece) = self.texts.iter().enumerate().min_by(|a, b| distance(rect(a.1)).total_cmp(&distance(rect(b.1))))?;
-        let byte = piece.layout.hit(x - piece.x + self.scroll_of(piece), (y - piece.y).clamp(0.0, piece.layout.height() - 0.01));
+        let (index, piece) =
+            self.texts.iter().enumerate().min_by(|a, b| distance(rect(a.1)).total_cmp(&distance(rect(b.1))))?;
+        let byte = piece
+            .layout
+            .hit(x - piece.x + self.scroll_of(piece), (y - piece.y).clamp(0.0, piece.layout.height() - 0.01));
         Some((index, byte))
     }
 
@@ -272,7 +292,9 @@ impl Doc {
         if !at.is_some_and(is_word) {
             return byte..byte + at.map_or(0, char::len_utf8);
         }
-        let start = text[..byte].rfind(|c: char| !is_word(c)).map_or(0, |i| i + text[i..].chars().next().map_or(1, char::len_utf8));
+        let start = text[..byte]
+            .rfind(|c: char| !is_word(c))
+            .map_or(0, |i| i + text[i..].chars().next().map_or(1, char::len_utf8));
         let end = text[byte..].find(|c: char| !is_word(c)).map_or(text.len(), |i| byte + i);
         start..end
     }
@@ -367,7 +389,11 @@ impl Doc {
                     let (table_w, table_h) = (cols.last().copied().unwrap_or(0.0), rows.last().copied().unwrap_or(0.0));
                     let header = rows.get(1).copied().unwrap_or(table_h);
                     p.bordered(Rect::new(x, y, table_w, table_h), [0.0; 4], theme::RADIUS, 1.0, t.border_strong);
-                    p.rect(Rect::new(x + 1.0, y + 1.0, table_w - 2.0, header - 1.0), fade(t.text, 0.04), theme::RADIUS - 1.0);
+                    p.rect(
+                        Rect::new(x + 1.0, y + 1.0, table_w - 2.0, header - 1.0),
+                        fade(t.text, 0.04),
+                        theme::RADIUS - 1.0,
+                    );
                     for &row in &rows[1..rows.len().saturating_sub(1)] {
                         p.rect(Rect::new(x, y + row, table_w, 1.0), t.border, 0.0);
                     }
@@ -400,7 +426,10 @@ impl Doc {
             if let Some(clip) = clip {
                 p.set_clip(clip);
             }
-            if interactive && !piece.links.is_empty() && ui.hovered(Rect::new(x, y, piece.layout.width(), piece.layout.height())) {
+            if interactive
+                && !piece.links.is_empty()
+                && ui.hovered(Rect::new(x, y, piece.layout.width(), piece.layout.height()))
+            {
                 let under = |(mx, my): (f32, f32)| piece.layout.link_at(mx - x, my - y);
                 if let Some(index) = under(ui.mouse) {
                     ui.cursor = winit::window::CursorIcon::Pointer;
@@ -475,7 +504,15 @@ impl Builder<'_> {
 
     fn text(&mut self, x: f32, y: f32, layout: TextLayout, inline: &Inline, sep: &'static str) -> f32 {
         let h = layout.height();
-        self.texts.push(TextPiece { x, y, layout, text: inline.text.clone(), sep, links: inline.links.clone(), code: None });
+        self.texts.push(TextPiece {
+            x,
+            y,
+            layout,
+            text: inline.text.clone(),
+            sep,
+            links: inline.links.clone(),
+            code: None,
+        });
         h
     }
 
@@ -520,7 +557,11 @@ impl Builder<'_> {
                 let bar = if content_w > width { 6.0 } else { 0.0 };
                 let h = CODE_HEADER + layout.height() + 2.0 * CODE_PAD - 4.0 + bar;
                 let index = self.codes;
-                self.decos.push(DecoPiece { x, y, deco: Deco::Code { w: width, h, content_w, lang: lang.clone(), code: code.clone(), index } });
+                self.decos.push(DecoPiece {
+                    x,
+                    y,
+                    deco: Deco::Code { w: width, h, content_w, lang: lang.clone(), code: code.clone(), index },
+                });
                 self.codes += 1;
                 let piece = TextPiece {
                     x: x + CODE_PAD,
@@ -549,9 +590,17 @@ impl Builder<'_> {
                     let item_sep = if n == 0 { sep } else { "\n" };
                     let indent = if item.task.is_some() { LIST_INDENT + 2.0 } else { LIST_INDENT };
                     match (item.task, start) {
-                        (Some(checked), _) => self.decos.push(DecoPiece { x: x + 2.0, y: item_y, deco: Deco::Checkbox { checked } }),
+                        (Some(checked), _) => {
+                            self.decos.push(DecoPiece { x: x + 2.0, y: item_y, deco: Deco::Checkbox { checked } });
+                        }
                         (None, Some(first)) => {
-                            let marker = TextLayout::new(self.fonts, &format!("{}.", first + n as u64), theme::BODY, None, self.scale);
+                            let marker = TextLayout::new(
+                                self.fonts,
+                                &format!("{}.", first + n as u64),
+                                theme::BODY,
+                                None,
+                                self.scale,
+                            );
                             let mx = x + LIST_INDENT - 7.0 - marker.width();
                             self.decos.push(DecoPiece { x: mx, y: item_y, deco: Deco::Marker(marker) });
                         }
@@ -560,7 +609,9 @@ impl Builder<'_> {
                             self.decos.push(DecoPiece { x: x + 7.0, y: item_y, deco: Deco::Marker(marker) });
                         }
                     }
-                    h += self.blocks(&item.blocks, x + indent, item_y, width - indent, ink, item_sep, ITEM_GAP + 2.0).max(18.0);
+                    h += self
+                        .blocks(&item.blocks, x + indent, item_y, width - indent, ink, item_sep, ITEM_GAP + 2.0)
+                        .max(18.0);
                 }
                 h
             }
@@ -746,7 +797,9 @@ mod tests {
 
     #[test]
     fn builds_pieces_in_reading_order() {
-        let d = doc("# Title\n\nSome **bold** text.\n\n- one\n- two\n\n```rust\nfn main() {}\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |");
+        let d = doc(
+            "# Title\n\nSome **bold** text.\n\n- one\n- two\n\n```rust\nfn main() {}\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |",
+        );
         let texts: Vec<&str> = d.texts.iter().map(|p| p.text.as_str()).collect();
         assert_eq!(texts, ["Title", "Some bold text.", "one", "two", "fn main() {}", "a", "b", "1", "2"]);
         assert!(d.texts.windows(2).all(|w| w[0].y <= w[1].y + 0.01));

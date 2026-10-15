@@ -38,8 +38,8 @@
 
 use std::fmt::Write as _;
 
-use serde_json::{Value, json};
 use openrp_core::{CastMember, Player, Role, StoredMessage, ToolCall, ToolResult, new_id};
+use serde_json::{Value, json};
 
 use super::names::{self, Who};
 
@@ -254,7 +254,12 @@ const REVIEWER: &str = "You keep the memory of an interactive roleplay story. Be
 /// description), played by `player`, with these `cast` names and the
 /// `memories` it holds already.
 #[must_use]
-pub fn reviewer_prompt(world: Option<(&str, &str)>, player: Option<&str>, cast: &[&str], memories: &[String]) -> String {
+pub fn reviewer_prompt(
+    world: Option<(&str, &str)>,
+    player: Option<&str>,
+    cast: &[&str],
+    memories: &[String],
+) -> String {
     let mut prompt = with_story(REVIEWER, world, player, cast);
     if !memories.is_empty() {
         prompt.push_str("\n\n# Memories already kept\n");
@@ -307,7 +312,9 @@ pub fn transcript(messages: &[StoredMessage], player: &str, limit: usize) -> Str
 /// whose speak call already ran.
 #[must_use]
 pub fn greeting(character: &str, text: &str) -> StoredMessage {
-    let arguments = json!({ "scene": "", "introduce": [], "messages": [{ "character": character, "action": "", "text": text }] }).to_string();
+    let arguments =
+        json!({ "scene": "", "introduce": [], "messages": [{ "character": character, "action": "", "text": text }] })
+            .to_string();
     let call = ToolCall { call_id: format!("call_{}", new_id()), name: SPEAK.to_owned(), arguments };
     let mut message = StoredMessage::new(Role::Assistant, String::new());
     message.tool_calls.push(ToolResult { call, output: "Spoken.".to_owned() });
@@ -318,7 +325,8 @@ pub fn greeting(character: &str, text: &str) -> StoredMessage {
 #[must_use]
 pub fn generated(call: &ToolCall) -> Option<(String, String)> {
     let args = serde_json::from_str::<Value>(&call.arguments).ok()?;
-    let field = |key: &str| args.get(key).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).map(str::to_owned);
+    let field =
+        |key: &str| args.get(key).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).map(str::to_owned);
     Some((field("name")?, field("description")?))
 }
 
@@ -330,7 +338,13 @@ fn by_name(written: &str, member: &CastMember) -> Option<String> {
 
 /// Adds `name` to the cast with `description`, or describes a member who
 /// has no description yet. Returns what the model is told.
-fn cast_in(cast: &mut Vec<CastMember>, player: Option<&Player>, name: &str, description: &str, present: bool) -> String {
+fn cast_in(
+    cast: &mut Vec<CastMember>,
+    player: Option<&Player>,
+    name: &str,
+    description: &str,
+    present: bool,
+) -> String {
     let (name, description) = (name.trim(), description.trim());
     if name.is_empty() {
         return "Error: a character needs a name.".to_owned();
@@ -354,9 +368,18 @@ fn cast_in(cast: &mut Vec<CastMember>, player: Option<&Player>, name: &str, desc
             None => format!("{name} is already in the cast."),
         },
         _ => {
-            let member = CastMember { id: new_id(), name: name.to_owned(), description: description.to_owned(), present, ..CastMember::default() };
+            let member = CastMember {
+                id: new_id(),
+                name: name.to_owned(),
+                description: description.to_owned(),
+                present,
+                ..CastMember::default()
+            };
             cast.push(member);
-            format!("{name} joined the cast{}.", if present { " and is in the scene" } else { ", away from the scene for now" })
+            format!(
+                "{name} joined the cast{}.",
+                if present { " and is in the scene" } else { ", away from the scene for now" }
+            )
         }
     }
 }
@@ -409,7 +432,13 @@ fn speakers(args: &Value) -> impl Iterator<Item = &str> {
 /// Runs `call` in a story with this `cast` (which it may grow or change),
 /// `scene` (which it may set), `memories` (which it may add to) and
 /// `player` (the user's character) and returns what the model is told.
-pub fn run(call: &ToolCall, cast: &mut Vec<CastMember>, scene: &mut String, memories: &mut Vec<String>, player: Option<&Player>) -> String {
+pub fn run(
+    call: &ToolCall,
+    cast: &mut Vec<CastMember>,
+    scene: &mut String,
+    memories: &mut Vec<String>,
+    player: Option<&Player>,
+) -> String {
     let Ok(args) = serde_json::from_str::<Value>(&call.arguments) else {
         return "Error: the arguments were not valid JSON. Nothing happened; call it again.".to_owned();
     };
@@ -478,10 +507,15 @@ pub fn run(call: &ToolCall, cast: &mut Vec<CastMember>, scene: &mut String, memo
             }
             if !twice.is_empty() {
                 let names = twice.join(", ");
-                notes.push(format!("{names} had more than one message; they were shown as one. Give each character a single message."));
+                notes.push(format!(
+                    "{names} had more than one message; they were shown as one. Give each character a single message."
+                ));
             }
             if !missing.is_empty() {
-                notes.push(format!("Not in the cast with a description: {}. Add them with create_character now.", missing.join(", ")));
+                notes.push(format!(
+                    "Not in the cast with a description: {}. Add them with create_character now.",
+                    missing.join(", ")
+                ));
             }
             if notes.is_empty() { "Spoken.".to_owned() } else { format!("Spoken. {}", notes.join(" ")) }
         }
@@ -489,11 +523,15 @@ pub fn run(call: &ToolCall, cast: &mut Vec<CastMember>, scene: &mut String, memo
             let present = args.get("present").and_then(Value::as_bool).unwrap_or(true);
             cast_in(cast, player, &field(&args, "name"), &field(&args, "description"), present)
         }
-        UPDATE_CHARACTER => update(cast, player, &field(&args, "character"), &field(&args, "name"), &field(&args, "description")),
+        UPDATE_CHARACTER => {
+            update(cast, player, &field(&args, "character"), &field(&args, "name"), &field(&args, "description"))
+        }
         REMEMBER => {
             let mut kept = 0;
-            for memory in args.get("memories").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
-                let memory: String = memory.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(MEMORY_LIMIT).collect();
+            for memory in args.get("memories").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str)
+            {
+                let memory: String =
+                    memory.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(MEMORY_LIMIT).collect();
                 if !memory.is_empty() && !memories.iter().any(|m| m.eq_ignore_ascii_case(&memory)) {
                     memories.push(memory);
                     kept += 1;
@@ -508,7 +546,11 @@ pub fn run(call: &ToolCall, cast: &mut Vec<CastMember>, scene: &mut String, memo
 /// Who acted in a reply's `speak` calls but is not in the cast with a
 /// description: they still need one.
 #[must_use]
-pub fn undescribed<'a>(calls: impl Iterator<Item = &'a ToolCall>, cast: &[CastMember], player: Option<&Player>) -> Vec<String> {
+pub fn undescribed<'a>(
+    calls: impl Iterator<Item = &'a ToolCall>,
+    cast: &[CastMember],
+    player: Option<&Player>,
+) -> Vec<String> {
     let mut missing: Vec<String> = Vec::new();
     for call in calls.filter(|c| c.name == SPEAK) {
         let Ok(args) = serde_json::from_str::<Value>(&call.arguments) else {
@@ -534,7 +576,8 @@ pub fn undescribed<'a>(calls: impl Iterator<Item = &'a ToolCall>, cast: &[CastMe
 pub fn shows_speech(call: &ToolCall) -> bool {
     let filled = |line: &Value, key: &str| line.get(key).and_then(Value::as_str).is_some_and(|t| !t.trim().is_empty());
     call.name == SPEAK
-        && serde_json::from_str::<Value>(&call.arguments).is_ok_and(|args| messages(&args).any(|l| filled(l, "text") || filled(l, "action")))
+        && serde_json::from_str::<Value>(&call.arguments)
+            .is_ok_and(|args| messages(&args).any(|l| filled(l, "text") || filled(l, "action")))
 }
 
 /// One piece of what a story reply shows.
@@ -559,7 +602,8 @@ pub enum Part {
 #[must_use]
 pub fn parts<'a>(calls: impl Iterator<Item = (&'a str, &'a str)>) -> Vec<Part> {
     let mut parts = Vec::new();
-    let text = |value: &Value, key: &str| value.get(key).and_then(Value::as_str).map(str::trim).unwrap_or_default().to_owned();
+    let text =
+        |value: &Value, key: &str| value.get(key).and_then(Value::as_str).map(str::trim).unwrap_or_default().to_owned();
     for (_, arguments) in calls.filter(|(name, _)| *name == SPEAK) {
         let Some(args) = parse_partial(arguments) else {
             continue;
@@ -570,7 +614,8 @@ pub fn parts<'a>(calls: impl Iterator<Item = (&'a str, &'a str)>) -> Vec<Part> {
             parts.push(scene);
         }
         for message in messages(&args) {
-            let (speaker, action, said) = (plain(&text(message, "character")), plain(&text(message, "action")), text(message, "text"));
+            let (speaker, action, said) =
+                (plain(&text(message, "character")), plain(&text(message, "action")), text(message, "text"));
             if speaker.is_empty() || (action.is_empty() && said.is_empty()) {
                 continue;
             }
@@ -599,12 +644,20 @@ pub fn reply_parts(message: &StoredMessage) -> Vec<Part> {
         return parts;
     };
     let note = |who: &str, what: &str| Part::Note(format!("{} {what}", plain(who)));
-    let joined = change.cast.iter().filter(|(before, _)| before.is_none()).map(|(_, after)| note(&after.name, "joins the story"));
+    let joined = change
+        .cast
+        .iter()
+        .filter(|(before, _)| before.is_none())
+        .map(|(_, after)| note(&after.name, "joins the story"));
     let at = parts.iter().position(|p| matches!(p, Part::Said { .. })).unwrap_or(parts.len());
     parts.splice(at..at, joined.collect::<Vec<_>>());
-    let left = change.cast.iter().filter(|(before, after)| before.as_ref().is_some_and(|b| b.present) && !after.present);
+    let left =
+        change.cast.iter().filter(|(before, after)| before.as_ref().is_some_and(|b| b.present) && !after.present);
     parts.extend(left.map(|(_, after)| note(&after.name, "leaves the scene")));
-    let renamed = change.cast.iter().filter_map(|(before, after)| before.as_ref().filter(|b| b.name != after.name).map(|b| (b, after)));
+    let renamed = change
+        .cast
+        .iter()
+        .filter_map(|(before, after)| before.as_ref().filter(|b| b.name != after.name).map(|b| (b, after)));
     parts.extend(renamed.map(|(before, after)| note(&before.name, &format!("is now called {}", plain(&after.name)))));
     parts.extend(change.memories.iter().map(|m| Part::Note(format!("Remembered: {}", plain(m)))));
     parts
@@ -612,7 +665,8 @@ pub fn reply_parts(message: &StoredMessage) -> Vec<Part> {
 
 /// Adds `text` to `character`'s bubble, or starts one; returns its index.
 fn add_said(parts: &mut Vec<Part>, character: &str, text: &str) -> usize {
-    let earlier = parts.iter().position(|part| matches!(part, Part::Said { character: c, .. } if names::same(c, character)));
+    let earlier =
+        parts.iter().position(|part| matches!(part, Part::Said { character: c, .. } if names::same(c, character)));
     if let Some(index) = earlier {
         if let Part::Said { text: said, .. } = &mut parts[index] {
             said.push_str("\n\n");
@@ -662,7 +716,10 @@ pub fn parse(markdown: &str) -> Vec<Part> {
             continue;
         }
         let italic = block.len() > 2 && block.starts_with('*') && block.ends_with('*') && !block.starts_with("**");
-        let event = italic && [" joins the story", " leaves the scene"].iter().any(|e| block.trim_end_matches(['*', '.']).ends_with(e));
+        let event = italic
+            && [" joins the story", " leaves the scene"]
+                .iter()
+                .any(|e| block.trim_end_matches(['*', '.']).ends_with(e));
         match current {
             // A paragraph after someone's speech is more of it.
             Some(index) if !event => {
@@ -705,11 +762,19 @@ pub fn respeak(calls: &mut Vec<ToolResult>, said: &[(&str, &str)]) {
             outputs.push(result.output);
         }
     }
-    let messages: Vec<Value> =
-        said.iter().filter(|(_, text)| !text.trim().is_empty()).map(|(character, text)| json!({ "character": character, "text": text.trim() })).collect();
+    let messages: Vec<Value> = said
+        .iter()
+        .filter(|(_, text)| !text.trim().is_empty())
+        .map(|(character, text)| json!({ "character": character, "text": text.trim() }))
+        .collect();
     if !messages.is_empty() {
-        let arguments = json!({ "scene": scene, "introduce": introduce, "messages": messages, "leave": leave }).to_string();
-        let call = ToolCall { call_id: call_id.unwrap_or_else(|| format!("call_{}", new_id())), name: SPEAK.into(), arguments };
+        let arguments =
+            json!({ "scene": scene, "introduce": introduce, "messages": messages, "leave": leave }).to_string();
+        let call = ToolCall {
+            call_id: call_id.unwrap_or_else(|| format!("call_{}", new_id())),
+            name: SPEAK.into(),
+            arguments,
+        };
         let output = if outputs.is_empty() { "Spoken.".to_owned() } else { outputs.join(" ") };
         kept.insert(at.unwrap_or(kept.len()), ToolResult { call, output });
     }
@@ -732,7 +797,12 @@ pub fn display(parts: &[Part]) -> String {
 /// `text` on one line without Markdown emphasis or code marks, so a name
 /// or action never breaks the formatting around it.
 fn plain(text: &str) -> String {
-    text.chars().map(|c| if c.is_control() { ' ' } else { c }).filter(|c| !matches!(c, '*' | '_' | '`')).collect::<String>().trim().to_owned()
+    text.chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .filter(|c| !matches!(c, '*' | '_' | '`'))
+        .collect::<String>()
+        .trim()
+        .to_owned()
 }
 
 /// Parses JSON that may be cut off part-way, as tool arguments are while
@@ -803,14 +873,23 @@ mod tests {
     }
 
     fn member(name: &str, present: bool) -> CastMember {
-        CastMember { id: name.to_lowercase(), name: name.into(), description: format!("{name}, described."), present, ..CastMember::default() }
+        CastMember {
+            id: name.to_lowercase(),
+            name: name.into(),
+            description: format!("{name}, described."),
+            present,
+            ..CastMember::default()
+        }
     }
 
     #[test]
     fn the_memory_review_reads_a_plain_transcript() {
         let mut reply = StoredMessage::new(Role::Assistant, String::new());
         let speak = json!({ "scene": "The woods.", "messages": [{ "character": "Katniss", "action": "lowers her bow", "text": "Stay back." }] });
-        reply.tool_calls = vec![ToolResult { call: call(SPEAK, &speak), output: String::new() }, ToolResult { call: call(REMEMBER, &json!({ "memories": ["x"] })), output: String::new() }];
+        reply.tool_calls = vec![
+            ToolResult { call: call(SPEAK, &speak), output: String::new() },
+            ToolResult { call: call(REMEMBER, &json!({ "memories": ["x"] })), output: String::new() },
+        ];
         let mut failed = StoredMessage::new(Role::Assistant, "Boom.".into());
         failed.failed = true;
         let old = StoredMessage::new(Role::Assistant, "**Peeta**: Hello.".into());
@@ -823,8 +902,15 @@ mod tests {
         assert_eq!(transcript(&[StoredMessage::new(Role::User, "ééé".into())], "G", 3), "…ééé");
         assert!(transcript(&[], "Gale", 5).is_empty());
 
-        let prompt = reviewer_prompt(Some(("Panem", "Twelve districts.")), Some("Gale"), &["Katniss"], &["Rue is hurt.".to_owned()]);
-        assert!(prompt.starts_with(REVIEWER) && prompt.contains("# World: Panem") && prompt.ends_with("- Rue is hurt."));
+        let prompt = reviewer_prompt(
+            Some(("Panem", "Twelve districts.")),
+            Some("Gale"),
+            &["Katniss"],
+            &["Rue is hurt.".to_owned()],
+        );
+        assert!(
+            prompt.starts_with(REVIEWER) && prompt.contains("# World: Panem") && prompt.ends_with("- Rue is hurt.")
+        );
     }
 
     #[test]
@@ -860,20 +946,31 @@ mod tests {
         let shown = parts([(SPEAK, args.to_string().as_str())].into_iter());
         assert_eq!(
             shown,
-            [said("Katniss", "*draws her bow* Stay back.\n\nI mean it."), said("Peeta", "Easy."), said("Haymitch", "*takes a long drink*")]
+            [
+                said("Katniss", "*draws her bow* Stay back.\n\nI mean it."),
+                said("Peeta", "Easy."),
+                said("Haymitch", "*takes a long drink*")
+            ]
         );
         assert_eq!(display(&shown[1..]), "**Peeta**: Easy.\n\n**Haymitch**: *takes a long drink*");
         // Stories saved before `messages` still show.
         let old = json!({ "lines": [{ "character": "Peeta", "text": "Easy." }] }).to_string();
         assert_eq!(parts([(SPEAK, old.as_str())].into_iter()), [said("Peeta", "Easy.")]);
         let created = json!({ "name": "Cato", "description": "A career." }).to_string();
-        assert!(parts([(CREATE_CHARACTER, created.as_str())].into_iter()).is_empty(), "what calls change shows once they ran");
+        assert!(
+            parts([(CREATE_CHARACTER, created.as_str())].into_iter()).is_empty(),
+            "what calls change shows once they ran"
+        );
     }
 
     #[test]
     fn edited_text_reads_back_into_bubbles() {
         // What display writes reads back as it was.
-        let shown = [Part::Note("The woods.".into()), said("Katniss", "*draws* Stay back.\n\nI mean it."), said("Peeta", "Easy.")];
+        let shown = [
+            Part::Note("The woods.".into()),
+            said("Katniss", "*draws* Stay back.\n\nI mean it."),
+            said("Peeta", "Easy."),
+        ];
         assert_eq!(parse(&display(&shown)), shown);
         // Earlier versions: a name over a quote, after narration.
         let old = "Leaves rustle.\n\n**Katniss** · *draws her bow*\n> Stay back.\n> I mean it.\n\n**Peeta**\n> Easy.\n\n*Rue joins the story.*";
@@ -929,7 +1026,8 @@ mod tests {
             let output = run(&call, &mut cast, &mut scene, &mut memories, None);
             reply.tool_calls.push(ToolResult { call, output });
         }
-        reply.change = openrp_core::StoryChange::between(&cast_before, &scene_before, &cast, &scene, &memories[known..]);
+        reply.change =
+            openrp_core::StoryChange::between(&cast_before, &scene_before, &cast, &scene, &memories[known..]);
         assert_eq!(
             reply_parts(&reply),
             [
@@ -948,11 +1046,20 @@ mod tests {
 
     #[test]
     fn edits_rewrite_the_speak_call() {
-        let speak = |id: &str, args: Value| ToolResult { call: ToolCall { call_id: id.into(), name: SPEAK.into(), arguments: args.to_string() }, output: "Spoken.".into() };
-        let created = ToolResult { call: call(CREATE_CHARACTER, &json!({ "name": "Rue", "description": "A girl." })), output: "Rue joined the cast and is in the scene.".into() };
+        let speak = |id: &str, args: Value| ToolResult {
+            call: ToolCall { call_id: id.into(), name: SPEAK.into(), arguments: args.to_string() },
+            output: "Spoken.".into(),
+        };
+        let created = ToolResult {
+            call: call(CREATE_CHARACTER, &json!({ "name": "Rue", "description": "A girl." })),
+            output: "Rue joined the cast and is in the scene.".into(),
+        };
         let mut calls = vec![
             created.clone(),
-            speak("a", json!({ "scene": "The woods.", "messages": [{ "character": "Katniss", "text": "Hi." }, { "character": "Peeta", "text": "Yo." }] })),
+            speak(
+                "a",
+                json!({ "scene": "The woods.", "messages": [{ "character": "Katniss", "text": "Hi." }, { "character": "Peeta", "text": "Yo." }] }),
+            ),
             speak("b", json!({ "messages": [{ "character": "Rue", "text": "Hey." }], "leave": ["Peeta"] })),
         ];
         respeak(&mut calls, &[("Katniss", "Hello there."), ("Peeta", " "), ("Rue", "Hey.")]);
@@ -972,23 +1079,40 @@ mod tests {
         let gale = Player { name: "Gale".into(), ..Player::default() };
         let mut cast = vec![member("Captain Rex", true), member("Alice", false)];
         let (mut scene, mut memories) = (String::new(), Vec::new());
-        let mut run = |call: &ToolCall, cast: &mut Vec<CastMember>| run(call, cast, &mut scene, &mut memories, Some(&gale));
+        let mut run =
+            |call: &ToolCall, cast: &mut Vec<CastMember>| run(call, cast, &mut scene, &mut memories, Some(&gale));
 
         // A short name finds the character, and the model is told theirs.
         let short = call(SPEAK, &json!({ "messages": [{ "character": "Rex", "text": "Sir." }] }));
         let said = run(&short, &mut cast);
         assert!(said.contains("Rex is Captain Rex in the cast") && !said.contains("Not in the cast"), "{said}");
-        assert!(undescribed([&short].into_iter(), &cast, Some(&gale)).is_empty(), "no repair round for a known character");
+        assert!(
+            undescribed([&short].into_iter(), &cast, Some(&gale)).is_empty(),
+            "no repair round for a known character"
+        );
         let again = run(&call(CREATE_CHARACTER, &json!({ "name": "rex", "description": "A clone." })), &mut cast);
         assert!(again.contains("already in the cast, as Captain Rex") && cast.len() == 2, "{again}");
 
         // The model renames someone; the old name keeps meaning them.
-        let renamed = run(&call(UPDATE_CHARACTER, &json!({ "character": "Alice", "name": "Queen Alice", "description": "Crowned now." })), &mut cast);
+        let renamed = run(
+            &call(
+                UPDATE_CHARACTER,
+                &json!({ "character": "Alice", "name": "Queen Alice", "description": "Crowned now." }),
+            ),
+            &mut cast,
+        );
         assert!(renamed.starts_with("Updated: Alice is now called Queen Alice"), "{renamed}");
-        assert_eq!((cast[1].name.as_str(), cast[1].aliases.as_slice(), cast[1].description.as_str()), ("Queen Alice", ["Alice".to_owned()].as_slice(), "Crowned now."));
-        let old_name = call(SPEAK, &json!({ "messages": [{ "character": "Alice", "text": "Hello." }], "leave": ["Captain Rex"] }));
+        assert_eq!(
+            (cast[1].name.as_str(), cast[1].aliases.as_slice(), cast[1].description.as_str()),
+            ("Queen Alice", ["Alice".to_owned()].as_slice(), "Crowned now.")
+        );
+        let old_name =
+            call(SPEAK, &json!({ "messages": [{ "character": "Alice", "text": "Hello." }], "leave": ["Captain Rex"] }));
         let said = run(&old_name, &mut cast);
-        assert!(said.contains("Moved into the scene: Queen Alice.") && said.contains("Left the scene: Captain Rex."), "{said}");
+        assert!(
+            said.contains("Moved into the scene: Queen Alice.") && said.contains("Left the scene: Captain Rex."),
+            "{said}"
+        );
         assert!(cast[1].present && !cast[0].present);
         let mut reply = StoredMessage::new(Role::Assistant, String::new());
         let before = vec![CastMember { name: "Alice".into(), ..cast[1].clone() }];
@@ -996,10 +1120,23 @@ mod tests {
         assert_eq!(reply_parts(&reply), [Part::Note("Alice is now called Queen Alice".into())], "the rename shows");
 
         // Errors name the cast; the user's character is not the model's.
-        assert!(run(&call(UPDATE_CHARACTER, &json!({ "character": "Bob", "name": "Robert" })), &mut cast).contains("Captain Rex, Queen Alice"));
-        assert!(run(&call(UPDATE_CHARACTER, &json!({ "character": "Gale", "name": "G" })), &mut cast).contains("user's character"));
-        assert!(run(&call(UPDATE_CHARACTER, &json!({ "character": "Rex", "name": "Queen Alice" })), &mut cast).starts_with("Error"), "taken");
-        assert!(run(&call(UPDATE_CHARACTER, &json!({ "character": "Rex" })), &mut cast).starts_with("Error"), "nothing to change");
+        assert!(
+            run(&call(UPDATE_CHARACTER, &json!({ "character": "Bob", "name": "Robert" })), &mut cast)
+                .contains("Captain Rex, Queen Alice")
+        );
+        assert!(
+            run(&call(UPDATE_CHARACTER, &json!({ "character": "Gale", "name": "G" })), &mut cast)
+                .contains("user's character")
+        );
+        assert!(
+            run(&call(UPDATE_CHARACTER, &json!({ "character": "Rex", "name": "Queen Alice" })), &mut cast)
+                .starts_with("Error"),
+            "taken"
+        );
+        assert!(
+            run(&call(UPDATE_CHARACTER, &json!({ "character": "Rex" })), &mut cast).starts_with("Error"),
+            "nothing to change"
+        );
     }
 
     #[test]
@@ -1007,33 +1144,77 @@ mod tests {
         let gale = Player { name: "Gale".into(), ..Player::default() };
         let mut cast = vec![member("Katniss", true), member("Haymitch", false)];
         let (mut scene, mut memories) = (String::new(), Vec::new());
-        let created = run(&call(CREATE_CHARACTER, &json!({ "name": "Cato", "description": "A career." })), &mut cast, &mut scene, &mut memories, Some(&gale));
+        let created = run(
+            &call(CREATE_CHARACTER, &json!({ "name": "Cato", "description": "A career." })),
+            &mut cast,
+            &mut scene,
+            &mut memories,
+            Some(&gale),
+        );
         assert!(created.contains("Cato joined"));
         assert!(cast.last().is_some_and(|m| m.name == "Cato" && m.present && !m.id.is_empty()));
-        assert!(run(&call(CREATE_CHARACTER, &json!({ "name": "cato", "description": "Again." })), &mut cast, &mut scene, &mut memories, None).contains("already"));
         assert!(
-            run(&call(CREATE_CHARACTER, &json!({ "name": "Gale", "description": "Me." })), &mut cast, &mut scene, &mut memories, Some(&gale))
-                .contains("user's character")
+            run(
+                &call(CREATE_CHARACTER, &json!({ "name": "cato", "description": "Again." })),
+                &mut cast,
+                &mut scene,
+                &mut memories,
+                None
+            )
+            .contains("already")
         );
         assert!(
-            run(&call(CREATE_CHARACTER, &json!({ "name": "Rue", "description": " " })), &mut cast, &mut scene, &mut memories, None).starts_with("Error"),
+            run(
+                &call(CREATE_CHARACTER, &json!({ "name": "Gale", "description": "Me." })),
+                &mut cast,
+                &mut scene,
+                &mut memories,
+                Some(&gale)
+            )
+            .contains("user's character")
+        );
+        assert!(
+            run(
+                &call(CREATE_CHARACTER, &json!({ "name": "Rue", "description": " " })),
+                &mut cast,
+                &mut scene,
+                &mut memories,
+                None
+            )
+            .starts_with("Error"),
             "never undescribed"
         );
         assert_eq!(cast.len(), 3);
 
-        let lines =
-            |who: &[&str]| json!({ "introduce": [], "messages": who.iter().map(|w| json!({ "character": w, "text": "Hi." })).collect::<Vec<_>>() });
-        assert_eq!(run(&call(SPEAK, &lines(&["Katniss", "Cato"])), &mut cast, &mut scene, &mut memories, Some(&gale)), "Spoken.");
+        let lines = |who: &[&str]| json!({ "introduce": [], "messages": who.iter().map(|w| json!({ "character": w, "text": "Hi." })).collect::<Vec<_>>() });
+        assert_eq!(
+            run(&call(SPEAK, &lines(&["Katniss", "Cato"])), &mut cast, &mut scene, &mut memories, Some(&gale)),
+            "Spoken."
+        );
         // Acting moves someone into the scene; a stranger is reported, not added.
-        let noted = run(&call(SPEAK, &lines(&["Haymitch", "Rue", "Gale", "Rue"])), &mut cast, &mut scene, &mut memories, Some(&gale));
-        assert!(noted.contains("Moved into the scene: Haymitch.") && noted.contains("Not in the cast with a description: Rue."));
-        assert!(noted.contains("Never speak or act for the user's character.") && noted.contains("Rue had more than one message"));
+        let noted = run(
+            &call(SPEAK, &lines(&["Haymitch", "Rue", "Gale", "Rue"])),
+            &mut cast,
+            &mut scene,
+            &mut memories,
+            Some(&gale),
+        );
+        assert!(
+            noted.contains("Moved into the scene: Haymitch.")
+                && noted.contains("Not in the cast with a description: Rue.")
+        );
+        assert!(
+            noted.contains("Never speak or act for the user's character.")
+                && noted.contains("Rue had more than one message")
+        );
         assert!(cast.iter().all(|m| m.present) && !cast.iter().any(|m| m.name == "Rue" || m.name == "Gale"));
-        assert_eq!(undescribed([&call(SPEAK, &lines(&["Rue", "Katniss", "rue", "Gale"]))].into_iter(), &cast, Some(&gale)), ["Rue"]);
+        assert_eq!(
+            undescribed([&call(SPEAK, &lines(&["Rue", "Katniss", "rue", "Gale"]))].into_iter(), &cast, Some(&gale)),
+            ["Rue"]
+        );
 
         // Introduced in the same call, a newcomer is cast before they act.
-        let introduced =
-            json!({ "introduce": [{ "name": "Rue", "description": "A girl from District 11." }], "lines": [{ "character": "Rue", "text": "Hi." }] });
+        let introduced = json!({ "introduce": [{ "name": "Rue", "description": "A girl from District 11." }], "lines": [{ "character": "Rue", "text": "Hi." }] });
         let spoken = run(&call(SPEAK, &introduced), &mut cast, &mut scene, &mut memories, None);
         assert!(spoken.starts_with("Spoken. Rue joined the cast") && !spoken.contains("Not in the cast"), "{spoken}");
         assert!(undescribed([&call(SPEAK, &introduced)].into_iter(), &cast, None).is_empty());
@@ -1042,19 +1223,35 @@ mod tests {
         cast.push(CastMember { id: "x".into(), name: "Rex".into(), present: true, ..CastMember::default() });
         assert_eq!(undescribed([&call(SPEAK, &lines(&["Rex"]))].into_iter(), &cast, None), ["Rex"]);
         assert_eq!(
-            run(&call(CREATE_CHARACTER, &json!({ "name": "Rex", "description": "A clone captain." })), &mut cast, &mut scene, &mut memories, None),
+            run(
+                &call(CREATE_CHARACTER, &json!({ "name": "Rex", "description": "A clone captain." })),
+                &mut cast,
+                &mut scene,
+                &mut memories,
+                None
+            ),
             "Rex is now described."
         );
         assert!(undescribed([&call(SPEAK, &lines(&["Rex"]))].into_iter(), &cast, None).is_empty());
 
-        assert!(run(&call(SPEAK, &json!({ "lines": [] })), &mut cast, &mut scene, &mut memories, None).starts_with("Error"));
-        assert!(run(&ToolCall { call_id: "c".into(), name: SPEAK.into(), arguments: "{".into() }, &mut cast, &mut scene, &mut memories, None).starts_with("Error"));
+        assert!(
+            run(&call(SPEAK, &json!({ "lines": [] })), &mut cast, &mut scene, &mut memories, None).starts_with("Error")
+        );
+        assert!(
+            run(
+                &ToolCall { call_id: "c".into(), name: SPEAK.into(), arguments: "{".into() },
+                &mut cast,
+                &mut scene,
+                &mut memories,
+                None
+            )
+            .starts_with("Error")
+        );
         assert!(run(&call("fly", &json!({})), &mut cast, &mut scene, &mut memories, None).starts_with("Error"));
         assert!(scene.is_empty(), "no call set a scene yet");
 
         // Moving on: a new scene, and Haymitch stays behind after speaking.
-        let moved =
-            json!({ "scene": " The train, at dusk. ", "lines": [{ "character": "Haymitch", "text": "Go." }], "leave": ["haymitch", "Nobody"] });
+        let moved = json!({ "scene": " The train, at dusk. ", "lines": [{ "character": "Haymitch", "text": "Go." }], "leave": ["haymitch", "Nobody"] });
         let noted = run(&call(SPEAK, &moved), &mut cast, &mut scene, &mut memories, None);
         assert!(noted.contains("Left the scene: Haymitch.") && noted.ends_with("Scene set."), "{noted}");
         assert!(scene == "The train, at dusk." && cast.iter().any(|m| m.name == "Haymitch" && !m.present));
@@ -1066,7 +1263,10 @@ mod tests {
 
         assert!(shows_speech(&call(SPEAK, &lines(&["Katniss"]))));
         assert!(!shows_speech(&call(SPEAK, &json!({ "lines": [{ "character": "K", "text": " " }] }))));
-        assert!(shows_speech(&call(SPEAK, &json!({ "lines": [{ "character": "K", "action": "nods", "text": "" }] }))), "acting counts");
+        assert!(
+            shows_speech(&call(SPEAK, &json!({ "lines": [{ "character": "K", "action": "nods", "text": "" }] }))),
+            "acting counts"
+        );
         assert!(!shows_speech(&call(CREATE_CHARACTER, &json!({ "name": "X" }))));
     }
 
@@ -1077,9 +1277,16 @@ mod tests {
         assert!(prompt.contains("# The user's character\n\nGale") && prompt.ends_with("Katniss, Peeta"));
         assert_eq!(generator_prompt(None, None, &[]), GENERATOR);
 
-        let made = generated(&call(CREATE_CHARACTER, &json!({ "name": " Rue ", "description": "A girl from District 11." })));
+        let made =
+            generated(&call(CREATE_CHARACTER, &json!({ "name": " Rue ", "description": "A girl from District 11." })));
         assert_eq!(made, Some(("Rue".into(), "A girl from District 11.".into())));
-        assert!(generated(&call(CREATE_CHARACTER, &json!({ "name": "Rue", "description": " " }))).is_none(), "never undescribed");
-        assert!(generated(&ToolCall { call_id: "c".into(), name: CREATE_CHARACTER.into(), arguments: "{".into() }).is_none());
+        assert!(
+            generated(&call(CREATE_CHARACTER, &json!({ "name": "Rue", "description": " " }))).is_none(),
+            "never undescribed"
+        );
+        assert!(
+            generated(&ToolCall { call_id: "c".into(), name: CREATE_CHARACTER.into(), arguments: "{".into() })
+                .is_none()
+        );
     }
 }

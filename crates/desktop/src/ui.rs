@@ -166,7 +166,9 @@ pub fn button(p: &mut Painter, ui: &mut Ui, rect: Rect, label: &str, style: Butt
         ButtonStyle::Primary => p.rect(rect, t.hover, radius),
         ButtonStyle::Secondary => p.bordered(rect, mix(t.surface, t.hover, hover), radius, 1.0, t.border_strong),
         ButtonStyle::Ghost => p.rect(rect, fade(t.hover, hover), radius),
-        ButtonStyle::Danger => p.bordered(rect, fade(t.danger, 0.1 * hover), radius, 1.0, fade(t.danger, 0.45 + 0.3 * hover)),
+        ButtonStyle::Danger => {
+            p.bordered(rect, fade(t.danger, 0.1 * hover), radius, 1.0, fade(t.danger, 0.45 + 0.3 * hover));
+        }
     }
     p.label_centered(label, theme::LABEL, rect, text_color);
     if hovered {

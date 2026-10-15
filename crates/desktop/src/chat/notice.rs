@@ -81,11 +81,19 @@ impl Chat {
                 close = Some(index);
             }
             if let Some((label, w)) = button_label
-                && button(p, ui, Rect::new(card.x + PAD - 8.0, card.bottom() - 36.0, w, 28.0), label, ButtonStyle::Ghost, true)
+                && button(
+                    p,
+                    ui,
+                    Rect::new(card.x + PAD - 8.0, card.bottom() - 36.0, w, 28.0),
+                    label,
+                    ButtonStyle::Ghost,
+                    true,
+                )
             {
                 open = Some(index);
             }
-            self.notices_rect = Some(self.notices_rect.map_or(card, |r: Rect| Rect::new(r.x, r.y, r.w, card.bottom() - r.y)));
+            self.notices_rect =
+                Some(self.notices_rect.map_or(card, |r: Rect| Rect::new(r.x, r.y, r.w, card.bottom() - r.y)));
             y = card.bottom() + GAP;
         }
         ui.blocker = blocker;

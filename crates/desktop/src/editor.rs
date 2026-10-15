@@ -68,8 +68,13 @@ impl Editor {
     pub fn insert(&mut self, input: &str) {
         self.delete_selection();
         let budget = self.max_chars.map_or(usize::MAX, |max| max.saturating_sub(self.text.chars().count()));
-        let filtered: String =
-            input.replace("\r\n", "\n").chars().map(|c| if c == '\r' { '\n' } else { c }).filter(|&c| self.accepts(c)).take(budget).collect();
+        let filtered: String = input
+            .replace("\r\n", "\n")
+            .chars()
+            .map(|c| if c == '\r' { '\n' } else { c })
+            .filter(|&c| self.accepts(c))
+            .take(budget)
+            .collect();
         self.text.insert_str(self.cursor, &filtered);
         self.cursor += filtered.len();
         self.anchor = self.cursor;
@@ -157,7 +162,9 @@ impl Editor {
     pub fn select_word(&mut self) {
         let is_word = |c: char| c.is_alphanumeric() || c == '_' || is_combining(c);
         let at = self.cursor;
-        let start = self.text[..at].rfind(|c: char| !is_word(c)).map_or(0, |i| i + self.text[i..].chars().next().map_or(1, char::len_utf8));
+        let start = self.text[..at]
+            .rfind(|c: char| !is_word(c))
+            .map_or(0, |i| i + self.text[i..].chars().next().map_or(1, char::len_utf8));
         let end = self.text[at..].find(|c: char| !is_word(c)).map_or(self.text.len(), |i| at + i);
         let (start, end) = if start == end { (at, self.next(at)) } else { (start, end) };
         self.anchor = start;
@@ -216,8 +223,10 @@ fn cluster_end(text: &str, i: usize) -> usize {
     let mut end = i + first.len_utf8();
     let mut prev = first;
     while let Some(&(j, c)) = chars.peek() {
-        let joins =
-            crate::font::is_emoji_joiner(c) || is_combining(c) || prev == '\u{200D}' || (regional(prev) && regional(c) && j == i + first.len_utf8());
+        let joins = crate::font::is_emoji_joiner(c)
+            || is_combining(c)
+            || prev == '\u{200D}'
+            || (regional(prev) && regional(c) && j == i + first.len_utf8());
         if !joins {
             break;
         }

@@ -234,9 +234,9 @@ const PYTHON: Lang = Lang {
     line: &["#"],
     block: None,
     keywords: &[
-        "and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del", "elif", "else", "except", "finally", "for", "from",
-        "global", "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while", "with", "yield", "match",
-        "case", "self", "print",
+        "and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del", "elif", "else", "except",
+        "finally", "for", "from", "global", "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass",
+        "raise", "return", "try", "while", "with", "yield", "match", "case", "self", "print",
     ],
     constants: &["True", "False", "None"],
     types: true,
@@ -343,15 +343,22 @@ const GO: Lang = Lang {
     kind: Kind::Other,
     markup: false,
 };
-const C_FAMILY: Lang =
-    Lang { line: &["//"], block: Some(("/*", "*/")), keywords: C_LIKE, constants: C_CONSTANTS, types: true, kind: Kind::Other, markup: false };
+const C_FAMILY: Lang = Lang {
+    line: &["//"],
+    block: Some(("/*", "*/")),
+    keywords: C_LIKE,
+    constants: C_CONSTANTS,
+    types: true,
+    kind: Kind::Other,
+    markup: false,
+};
 const SHELL: Lang = Lang {
     line: &["#"],
     block: None,
     keywords: &[
-        "if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "case", "esac", "in", "function", "return", "exit", "export",
-        "local", "readonly", "source", "echo", "cd", "set", "unset", "shift", "sudo", "param", "foreach", "begin", "process", "end", "try", "catch",
-        "finally", "throw",
+        "if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "case", "esac", "in", "function",
+        "return", "exit", "export", "local", "readonly", "source", "echo", "cd", "set", "unset", "shift", "sudo",
+        "param", "foreach", "begin", "process", "end", "try", "catch", "finally", "throw",
     ],
     constants: &["true", "false", "$true", "$false", "$null"],
     types: false,
@@ -489,8 +496,8 @@ const LUA: Lang = Lang {
     line: &["--"],
     block: Some(("--[[", "]]")),
     keywords: &[
-        "and", "break", "do", "else", "elseif", "end", "for", "function", "goto", "if", "in", "local", "not", "or", "repeat", "return", "then",
-        "until", "while",
+        "and", "break", "do", "else", "elseif", "end", "for", "function", "goto", "if", "in", "local", "not", "or",
+        "repeat", "return", "then", "until", "while",
     ],
     constants: &["true", "false", "nil"],
     types: false,
@@ -506,9 +513,24 @@ const DATA: Lang = Lang {
     kind: Kind::Other,
     markup: false,
 };
-const JSON: Lang =
-    Lang { line: &["//"], block: None, keywords: &[], constants: &["true", "false", "null"], types: false, kind: Kind::Other, markup: false };
-const MARKUP: Lang = Lang { line: &[], block: Some(("<!--", "-->")), keywords: &[], constants: &[], types: false, kind: Kind::Dashed, markup: true };
+const JSON: Lang = Lang {
+    line: &["//"],
+    block: None,
+    keywords: &[],
+    constants: &["true", "false", "null"],
+    types: false,
+    kind: Kind::Other,
+    markup: false,
+};
+const MARKUP: Lang = Lang {
+    line: &[],
+    block: Some(("<!--", "-->")),
+    keywords: &[],
+    constants: &[],
+    types: false,
+    kind: Kind::Dashed,
+    markup: true,
+};
 const CSS: Lang = Lang {
     line: &["//"],
     block: Some(("/*", "*/")),
@@ -522,15 +544,16 @@ const HASKELL: Lang = Lang {
     line: &["--"],
     block: Some(("{-", "-}")),
     keywords: &[
-        "case", "class", "data", "deriving", "do", "else", "if", "import", "in", "instance", "let", "module", "of", "then", "type", "where",
-        "newtype",
+        "case", "class", "data", "deriving", "do", "else", "if", "import", "in", "instance", "let", "module", "of",
+        "then", "type", "where", "newtype",
     ],
     constants: &["True", "False", "Nothing", "Just"],
     types: true,
     kind: Kind::Other,
     markup: false,
 };
-const PLAIN: Lang = Lang { line: &[], block: None, keywords: &[], constants: &[], types: false, kind: Kind::Other, markup: false };
+const PLAIN: Lang =
+    Lang { line: &[], block: None, keywords: &[], constants: &[], types: false, kind: Kind::Other, markup: false };
 
 fn lang(name: &str) -> &'static Lang {
     match name {
@@ -538,10 +561,11 @@ fn lang(name: &str) -> &'static Lang {
         "python" | "py" | "python3" | "gdscript" => &PYTHON,
         "javascript" | "js" | "jsx" | "typescript" | "ts" | "tsx" | "mjs" | "cjs" | "node" => &JS,
         "go" | "golang" => &GO,
-        "c" | "h" | "cpp" | "c++" | "cc" | "hpp" | "cxx" | "java" | "kotlin" | "kt" | "swift" | "csharp" | "cs" | "c#" | "objc" | "objective-c"
-        | "dart" | "scala" | "zig" | "glsl" | "hlsl" | "wgsl" | "php" | "groovy" | "proto" => &C_FAMILY,
-        "bash" | "sh" | "shell" | "zsh" | "fish" | "console" | "powershell" | "ps1" | "pwsh" | "bat" | "cmd" | "dockerfile" | "docker"
-        | "makefile" | "make" => &SHELL,
+        "c" | "h" | "cpp" | "c++" | "cc" | "hpp" | "cxx" | "java" | "kotlin" | "kt" | "swift" | "csharp" | "cs"
+        | "c#" | "objc" | "objective-c" | "dart" | "scala" | "zig" | "glsl" | "hlsl" | "wgsl" | "php" | "groovy"
+        | "proto" => &C_FAMILY,
+        "bash" | "sh" | "shell" | "zsh" | "fish" | "console" | "powershell" | "ps1" | "pwsh" | "bat" | "cmd"
+        | "dockerfile" | "docker" | "makefile" | "make" => &SHELL,
         "sql" | "postgres" | "postgresql" | "mysql" | "sqlite" => &SQL,
         "ruby" | "rb" | "crystal" | "elixir" | "ex" | "exs" => &RUBY,
         "lua" => &LUA,
@@ -594,10 +618,13 @@ pub fn highlight(language: &str, code: &str) -> Vec<(Range<usize>, Token)> {
         // Strings: triple quotes, then single-line or backtick strings.
         if matches!(c, '"' | '\'' | '`') {
             let triple: String = std::iter::repeat_n(c, 3).collect();
-            let (delim, multiline) = if tail.starts_with(&triple) { (triple.as_str(), true) } else { (&tail[..1], c == '`') };
+            let (delim, multiline) =
+                if tail.starts_with(&triple) { (triple.as_str(), true) } else { (&tail[..1], c == '`') };
             // In Rust, `'a` is a lifetime unless it closes like a char (`'a'`, `'\n'`).
-            let lifetime =
-                lang.kind == Kind::Rust && c == '\'' && !tail[1..].starts_with('\\') && tail[1..].chars().nth(1).is_some_and(|n| n != '\'');
+            let lifetime = lang.kind == Kind::Rust
+                && c == '\''
+                && !tail[1..].starts_with('\\')
+                && tail[1..].chars().nth(1).is_some_and(|n| n != '\'');
             if !lifetime {
                 let mut j = i + delim.len();
                 let mut end = code.len();
@@ -624,8 +651,9 @@ pub fn highlight(language: &str, code: &str) -> Vec<(Range<usize>, Token)> {
         }
         if lang.markup && c == '<' {
             let name_start = i + 1 + usize::from(tail[1..].starts_with('/'));
-            let name_len =
-                code[name_start..].find(|x: char| !(x.is_alphanumeric() || x == '-' || x == ':' || x == '_')).unwrap_or(code.len() - name_start);
+            let name_len = code[name_start..]
+                .find(|x: char| !(x.is_alphanumeric() || x == '-' || x == ':' || x == '_'))
+                .unwrap_or(code.len() - name_start);
             if name_len > 0 {
                 out.push((name_start..name_start + name_len, Token::Keyword));
                 i = name_start + name_len;
@@ -652,7 +680,8 @@ pub fn highlight(language: &str, code: &str) -> Vec<(Range<usize>, Token)> {
                 Some(Token::Number)
             } else if next == Some('(') || (next == Some('!') && lang.kind == Kind::Rust) {
                 Some(Token::Function)
-            } else if (lang.types && word.starts_with(|x: char| x.is_uppercase())) || (lang.markup && next == Some('=')) {
+            } else if (lang.types && word.starts_with(|x: char| x.is_uppercase())) || (lang.markup && next == Some('='))
+            {
                 Some(Token::Type)
             } else {
                 None
@@ -702,9 +731,18 @@ mod tests {
     fn python_and_shell() {
         assert_eq!(
             tokens("py", "def f():\n    return None  # done"),
-            [("def", Token::Keyword), ("f", Token::Function), ("return", Token::Keyword), ("None", Token::Number), ("# done", Token::Comment)]
+            [
+                ("def", Token::Keyword),
+                ("f", Token::Function),
+                ("return", Token::Keyword),
+                ("None", Token::Number),
+                ("# done", Token::Comment)
+            ]
         );
-        assert_eq!(tokens("bash", "echo \"$HOME\" # c\nfoo#bar"), [("echo", Token::Keyword), ("\"$HOME\"", Token::String), ("# c", Token::Comment)]);
+        assert_eq!(
+            tokens("bash", "echo \"$HOME\" # c\nfoo#bar"),
+            [("echo", Token::Keyword), ("\"$HOME\"", Token::String), ("# c", Token::Comment)]
+        );
         assert_eq!(tokens("sql", "SELECT id FROM t"), [("SELECT", Token::Keyword), ("FROM", Token::Keyword)]);
     }
 

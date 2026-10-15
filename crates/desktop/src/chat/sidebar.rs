@@ -86,7 +86,11 @@ impl Chat {
                 30.0
             } else if conversation.busy() {
                 let pulse = 0.5 + 0.5 * (ui.time * 4.0).sin();
-                p.rect(Rect::new(item.right() - 16.0, item.y + item_h * 0.5 - 3.0, 6.0, 6.0), fade(t.accent, 0.4 + 0.6 * pulse), 3.0);
+                p.rect(
+                    Rect::new(item.right() - 16.0, item.y + item_h * 0.5 - 3.0, 6.0, 6.0),
+                    fade(t.accent, 0.4 + 0.6 * pulse),
+                    3.0,
+                );
                 24.0
             } else {
                 let age = p.layout(&ago(now, conversation.updated), theme::TINY, None);
@@ -95,7 +99,8 @@ impl Chat {
             };
 
             // A story nobody wrote in yet is named after its world.
-            let world = conversation.world.as_deref().and_then(|w| self.library.get(Kind::World, w)).map(|w| w.name.as_str());
+            let world =
+                conversation.world.as_deref().and_then(|w| self.library.get(Kind::World, w)).map(|w| w.name.as_str());
             let name = if conversation.title.is_empty() { world.unwrap_or("New story") } else { &conversation.title };
             let mut title = p.layout(name, theme::SMALL, None);
             title.truncate(p.fonts, item.w - 10.0 - right_w);
@@ -121,7 +126,15 @@ impl Chat {
 
         p.rect(Rect::new(0.0, area.h - 47.0, area.w - 1.0, 1.0), t.border, 0.0);
         let settings = Rect::new(8.0, area.h - 39.0, area.w - 16.0, 30.0);
-        if list_row(p, ui, settings, id("settings"), "Settings", Some(&format!("{PRIMARY_KEY}+,")), self.page == Page::Settings) {
+        if list_row(
+            p,
+            ui,
+            settings,
+            id("settings"),
+            "Settings",
+            Some(&format!("{PRIMARY_KEY}+,")),
+            self.page == Page::Settings,
+        ) {
             self.toggle_settings();
         }
     }
@@ -129,7 +142,15 @@ impl Chat {
 
 /// Draws a left-aligned list row with an optional right-hand hint and
 /// returns whether it was clicked.
-pub(super) fn list_row(p: &mut Painter, ui: &mut Ui, rect: Rect, key: u64, label: &str, hint: Option<&str>, selected: bool) -> bool {
+pub(super) fn list_row(
+    p: &mut Painter,
+    ui: &mut Ui,
+    rect: Rect,
+    key: u64,
+    label: &str,
+    hint: Option<&str>,
+    selected: bool,
+) -> bool {
     let t = p.theme;
     let hovered = ui.hovered(rect);
     let hover = ui.anim(key, f32::from(u8::from(hovered)));

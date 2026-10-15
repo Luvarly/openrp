@@ -36,7 +36,16 @@ pub(super) enum Command {
 }
 
 impl Command {
-    const ALL: [Self; 8] = [Self::Ooc, Self::Impersonate, Self::Note, Self::Memory, Self::Memorize, Self::Duplicate, Self::Frame, Self::Clear];
+    const ALL: [Self; 8] = [
+        Self::Ooc,
+        Self::Impersonate,
+        Self::Note,
+        Self::Memory,
+        Self::Memorize,
+        Self::Duplicate,
+        Self::Frame,
+        Self::Clear,
+    ];
 
     /// What follows the slash.
     pub(super) fn name(self) -> &'static str {
@@ -81,7 +90,13 @@ impl Command {
 impl Chat {
     /// Draws the composer. Returns its top edge and
     /// the menu anchors: the toolbar's model and reasoning buttons, and the card.
-    pub(super) fn draw_composer(&mut self, p: &mut Painter, ui: &mut Ui, main: Rect, actions: &mut Vec<Action>) -> (f32, [Rect; 3]) {
+    pub(super) fn draw_composer(
+        &mut self,
+        p: &mut Painter,
+        ui: &mut Ui,
+        main: Rect,
+        actions: &mut Vec<Action>,
+    ) -> (f32, [Rect; 3]) {
         let t = p.theme;
         let (x, width) = Self::column(main);
         let pad = 12.0;
@@ -113,7 +128,10 @@ impl Chat {
             r.start + ime_cursor
         });
         let (caret_x, caret_y) = layout.caret(caret_byte);
-        self.composer_scroll = self.composer_scroll.clamp(caret_y + line_h - visible_h, caret_y).clamp(0.0, (layout.height() - visible_h).max(0.0));
+        self.composer_scroll = self
+            .composer_scroll
+            .clamp(caret_y + line_h - visible_h, caret_y)
+            .clamp(0.0, (layout.height() - visible_h).max(0.0));
         let origin = (text_area.x, text_area.y - self.composer_scroll);
         self.caret_rect = Some(Rect::new(origin.0 + caret_x, origin.1 + caret_y, 2.0, line_h));
 

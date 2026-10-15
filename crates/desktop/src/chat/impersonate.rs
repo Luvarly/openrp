@@ -47,7 +47,12 @@ impl Chat {
     /// now: a story begun, loaded, with nothing on its way.
     pub(super) fn can_impersonate(&self) -> bool {
         self.conversations.iter().find(|c| c.id == self.current).is_some_and(|c| {
-            c.world.is_some() && c.player.is_some() && c.load == Load::Loaded && !c.busy() && c.playable() && self.impersonation.is_none()
+            c.world.is_some()
+                && c.player.is_some()
+                && c.load == Load::Loaded
+                && !c.busy()
+                && c.playable()
+                && self.impersonation.is_none()
         })
     }
 
@@ -90,7 +95,15 @@ impl Chat {
             tool_choice: Some(ToolChoice::None),
             cancel: Arc::clone(&cancel),
         };
-        self.impersonation = Some(Impersonation { conversation: current, stream, cancel, model, player, writing: false, charged: Usage::default() });
+        self.impersonation = Some(Impersonation {
+            conversation: current,
+            stream,
+            cancel,
+            model,
+            player,
+            writing: false,
+            charged: Usage::default(),
+        });
         actions.push(Action::Send(job));
     }
 
@@ -135,7 +148,8 @@ impl Chat {
     /// whether the server rejected our token.
     pub(super) fn impersonation_ended(&mut self, result: &Result<bool, Error>) -> bool {
         let Some(impersonation) = self.impersonation.take() else { return false };
-        let cost = self.models.iter().find(|m| m.id == impersonation.model).map_or(0.0, |m| m.cost(impersonation.charged));
+        let cost =
+            self.models.iter().find(|m| m.id == impersonation.model).map_or(0.0, |m| m.cost(impersonation.charged));
         if let Some(conversation) = self.find(impersonation.conversation) {
             conversation.carried_cost += cost;
         }
@@ -152,7 +166,9 @@ impl Chat {
         }
         // Models sometimes lead with the speaker's name, as in a script.
         let text = self.composer.text().trim();
-        let named = text.get(..impersonation.player.len() + 1).is_some_and(|head| head.eq_ignore_ascii_case(&format!("{}:", impersonation.player)));
+        let named = text
+            .get(..impersonation.player.len() + 1)
+            .is_some_and(|head| head.eq_ignore_ascii_case(&format!("{}:", impersonation.player)));
         let cleaned = if named { text[impersonation.player.len() + 1..].trim() } else { text };
         let cleaned = cleaned.to_owned();
         self.composer.take();
@@ -178,7 +194,10 @@ mod tests {
         chat.impersonate(&mut actions);
         let Some(Action::Send(job)) = actions.pop() else { panic!("not sent") };
         assert!(job.tool_choice == Some(ToolChoice::None) && job.tools);
-        assert!(job.state.as_deref().is_some_and(|s| s.contains("as Gale") && s.ends_with("I ask about")), "the draft is its starting point");
+        assert!(
+            job.state.as_deref().is_some_and(|s| s.contains("as Gale") && s.ends_with("I ask about")),
+            "the draft is its starting point"
+        );
         assert!(chat.impersonating() && !chat.can_impersonate());
 
         // The draft stays until text comes, then the text replaces it.
@@ -188,7 +207,11 @@ mod tests {
         chat.stream_event(job.conversation, job.stream, StreamEvent::Text(" mines.".into()));
         assert_eq!(chat.composer.text(), "Gale: I ask about the mines.");
         let usage = openrp_core::Usage::new(100, 10);
-        chat.stream_event(job.conversation, job.stream, StreamEvent::Completed(Completion { usage, ..Completion::default() }));
+        chat.stream_event(
+            job.conversation,
+            job.stream,
+            StreamEvent::Completed(Completion { usage, ..Completion::default() }),
+        );
         assert!(!chat.stream_end(job.conversation, job.stream, Ok(true), &mut actions));
         assert_eq!(chat.composer.text(), "I ask about the mines.", "the name it led with is dropped");
         assert!(!chat.impersonating() && chat.current().entries.is_empty(), "nothing joined the story");

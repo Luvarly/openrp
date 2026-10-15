@@ -140,9 +140,12 @@ impl Entry {
             height += REASONING_ROW;
             if self.reasoning_shown(view) {
                 let rwrap = width - 14.0;
-                if self.reasoning_doc.as_ref().is_none_or(|d| !d.fits(rwrap, p.scale)) || self.reasoning_len != self.message.reasoning.len() {
+                if self.reasoning_doc.as_ref().is_none_or(|d| !d.fits(rwrap, p.scale))
+                    || self.reasoning_len != self.message.reasoning.len()
+                {
                     let previous = self.reasoning_doc.take();
-                    self.reasoning_doc = Some(Doc::markdown(p.fonts, &self.message.reasoning, rwrap, p.scale, INK_MUTED, previous));
+                    self.reasoning_doc =
+                        Some(Doc::markdown(p.fonts, &self.message.reasoning, rwrap, p.scale, INK_MUTED, previous));
                     self.reasoning_len = self.message.reasoning.len();
                 }
                 height += self.reasoning_doc.as_ref().map_or(0.0, |d| d.height) + 12.0;
@@ -202,7 +205,8 @@ impl Chat {
         let story = conversation.world.is_some();
         let started = conversation.stream.as_ref().map(|s| s.started);
         // Under the messages: a retry in progress, or the Continue button.
-        let retry = conversation.retry.as_ref().map(|r| format!("Retrying ({} of {MAX_RETRIES}): {}", r.attempt, r.error));
+        let retry =
+            conversation.retry.as_ref().map(|r| format!("Retrying ({} of {MAX_RETRIES}): {}", r.attempt, r.error));
         let resumable = conversation.resumable();
         let footer_h = if retry.is_some() || resumable { FOOTER_H } else { 0.0 };
         let busy = conversation.busy();
@@ -220,10 +224,17 @@ impl Chat {
         let mut edit = self.turn_edit.as_mut().filter(|e| e.conversation == current);
         let slots: Vec<(u64, Option<String>)> =
             edit.as_ref().map(|e| e.slots.iter().map(|s| (s.entry, s.character.clone())).collect()).unwrap_or_default();
-        let field_w = |character: &Option<String>| if character.is_some() { width - AVATAR - AVATAR_GAP } else { width };
+        let field_w =
+            |character: &Option<String>| if character.is_some() { width - AVATAR - AVATAR_GAP } else { width };
         let mut edit_layouts: Vec<Option<TextLayout>> = edit
             .as_ref()
-            .map(|e| slots.iter().enumerate().map(|(k, (_, character))| Some(e.fields.layout(p, k, field_w(character)))).collect())
+            .map(|e| {
+                slots
+                    .iter()
+                    .enumerate()
+                    .map(|(k, (_, character))| Some(e.fields.layout(p, k, field_w(character))))
+                    .collect()
+            })
             .unwrap_or_default();
         let field_heights: Vec<f32> = edit_layouts
             .iter()
@@ -237,16 +248,23 @@ impl Chat {
         // An edited reply's height: its fields (under names), then the buttons.
         let edit_height = |id: u64| -> Option<f32> {
             let rows = slots.iter().zip(&field_heights).filter(|((entry, _), _)| *entry == id);
-            let rows: Vec<f32> = rows.map(|((_, character), field)| field + if character.is_some() { NAME_H } else { 0.0 }).collect();
+            let rows: Vec<f32> =
+                rows.map(|((_, character), field)| field + if character.is_some() { NAME_H } else { 0.0 }).collect();
             let gaps = PART_GAP * rows.len().saturating_sub(1) as f32;
-            (!rows.is_empty()).then(|| rows.iter().sum::<f32>() + gaps + if last_edited == Some(id) { EDIT_BAR } else { 0.0 })
+            (!rows.is_empty())
+                .then(|| rows.iter().sum::<f32>() + gaps + if last_edited == Some(id) { EDIT_BAR } else { 0.0 })
         };
-        let editable: Vec<bool> = anchors.iter().map(|t| t.as_ref().is_some_and(|t| turns::has_editable(&conversation.entries, t))).collect();
+        let editable: Vec<bool> =
+            anchors.iter().map(|t| t.as_ref().is_some_and(|t| turns::has_editable(&conversation.entries, t))).collect();
         // Regenerate sends the last prompt again: there must be one.
         let regen_ok = conversation.entries.iter().any(|e| e.message.role == Role::User);
         // The last prompt's replies, to swipe between: (shown, how many).
         // Or, before anyone wrote, the greetings the story can open with.
-        let swipes = conversation.swipes().map(|(_, shown, count)| (shown, count)).or_else(|| conversation.greetings()).filter(|(_, count)| *count > 1);
+        let swipes = conversation
+            .swipes()
+            .map(|(_, shown, count)| (shown, count))
+            .or_else(|| conversation.greetings())
+            .filter(|(_, count)| *count > 1);
         let greeting = conversation.greetings().is_some();
         let player = conversation.player.clone();
 
@@ -254,7 +272,16 @@ impl Chat {
         let mut content_h = 24.0 + footer_h;
         for (index, entry) in conversation.entries.iter_mut().enumerate() {
             let live = live_entry == Some(entry.id);
-            content_h += entry_height(entry, edit_height(entry.id), anchors[index].is_some(), p, width, live, story, reasoning_view) + MESSAGE_GAP;
+            content_h += entry_height(
+                entry,
+                edit_height(entry.id),
+                anchors[index].is_some(),
+                p,
+                width,
+                live,
+                story,
+                reasoning_view,
+            ) + MESSAGE_GAP;
         }
         let max_scroll = (content_h - view.h).max(0.0);
 
@@ -350,7 +377,11 @@ impl Chat {
                         Rect::new(x, top, width, field_heights[k])
                     };
                     if let (Some(edit), Some(layout)) = (edit.as_deref_mut(), edit_layouts[k].take()) {
-                        let hint = if character.is_some() { "Empty: they say nothing in this reply" } else { "Empty: this reply is removed" };
+                        let hint = if character.is_some() {
+                            "Empty: they say nothing in this reply"
+                        } else {
+                            "Empty: this reply is removed"
+                        };
                         edit.fields.draw(k, p, ui, field, layout, hint, in_view);
                     }
                     top = field.bottom() + PART_GAP;
@@ -359,16 +390,27 @@ impl Chat {
                     let bar_y = area.bottom() - EDIT_BAR + 10.0;
                     let save = Rect::new(area.right() - 90.0, bar_y, 90.0, 30.0);
                     effects.save_edit |= button(p, ui, save, "Save", ButtonStyle::Primary, in_view);
-                    effects.cancel_edit |= button(p, ui, Rect::new(save.x - 96.0, bar_y, 90.0, 30.0), "Cancel", ButtonStyle::Ghost, in_view);
+                    effects.cancel_edit |= button(
+                        p,
+                        ui,
+                        Rect::new(save.x - 96.0, bar_y, 90.0, 30.0),
+                        "Cancel",
+                        ButtonStyle::Ghost,
+                        in_view,
+                    );
                     let tip = p.layout(&format!("{PRIMARY_KEY}+Enter to save, Esc to cancel"), theme::TINY, None);
                     p.text(&tip, x, bar_y + (30.0 - tip.height()) * 0.5, t.text_faint);
                 }
                 continue;
             }
             if entry.boxed() {
-                let (fill, border, color) =
-                    if entry.message.failed { (fade(t.danger, 0.08), fade(t.danger, 0.4), t.danger) } else { (t.surface, t.border, t.text) };
-                let boxed = Rect::new(area.x, area.y, area.w, area.h - if anchors[index].is_some() { META_H } else { 0.0 });
+                let (fill, border, color) = if entry.message.failed {
+                    (fade(t.danger, 0.08), fade(t.danger, 0.4), t.danger)
+                } else {
+                    (t.surface, t.border, t.text)
+                };
+                let boxed =
+                    Rect::new(area.x, area.y, area.w, area.h - if anchors[index].is_some() { META_H } else { 0.0 });
                 p.bordered(boxed, fill, theme::RADIUS, 1.0, border);
                 let origin = (area.x + BOX_PAD.0, area.y + BOX_PAD.1);
                 if let Some(doc) = entry.doc.as_mut().filter(|_| !entry.display.is_empty()) {
@@ -376,7 +418,12 @@ impl Chat {
                         doc.draw_selection(p, origin, a, b);
                     }
                     doc.draw(p, ui, origin, color, in_view, None);
-                    targets.push(Target { entry: index, doc: 1, origin, rect: Rect::new(origin.0, origin.1, width, doc.height) });
+                    targets.push(Target {
+                        entry: index,
+                        doc: 1,
+                        origin,
+                        rect: Rect::new(origin.0, origin.1, width, doc.height),
+                    });
                 }
                 if let Some(buttons) = &actions_for {
                     let clicked = turn_buttons(p, ui, area.right(), boxed.bottom() + 6.0, buttons).map(|c| (c, index));
@@ -409,7 +456,12 @@ impl Chat {
                     }
                     let event = doc.draw(p, ui, origin, t.text_muted, in_view, None);
                     effects.link = effects.link.take().or(event.open_link);
-                    targets.push(Target { entry: index, doc: 1, origin, rect: Rect::new(origin.0, origin.1, width - 14.0, doc.height) });
+                    targets.push(Target {
+                        entry: index,
+                        doc: 1,
+                        origin,
+                        rect: Rect::new(origin.0, origin.1, width - 14.0, doc.height),
+                    });
                 }
                 continue;
             }
@@ -443,7 +495,12 @@ impl Chat {
                     }
                     let event = doc.draw(p, ui, origin, t.text_muted, in_view, None);
                     effects.link = effects.link.take().or(event.open_link);
-                    targets.push(Target { entry: index, doc: 0, origin, rect: Rect::new(origin.0, origin.1, width - 14.0, doc.height) });
+                    targets.push(Target {
+                        entry: index,
+                        doc: 0,
+                        origin,
+                        rect: Rect::new(origin.0, origin.1, width - 14.0, doc.height),
+                    });
                     top += doc.height + 12.0;
                 }
             }
@@ -478,12 +535,21 @@ impl Chat {
                             // A change to the story: a dot in the portraits' column.
                             let mid = doc.texts.first().map_or(8.0, |t| t.layout.height() * 0.5);
                             p.rect(Rect::new(x + AVATAR * 0.5 - 2.5, top + mid - 2.5, 5.0, 5.0), t.border_strong, 2.5);
-                            ((column, top), t.text_faint, Rect::new(column, top, width - AVATAR - AVATAR_GAP, doc.height))
+                            (
+                                (column, top),
+                                t.text_faint,
+                                Rect::new(column, top, width - AVATAR - AVATAR_GAP, doc.height),
+                            )
                         }
                         Part::Said { character, .. } => {
                             speaker(p, (&conversation.cast, player.as_ref(), library), character, (x, top), width);
                             // Every bubble spans the column, whatever its text.
-                            let bubble = Rect::new(column, top + NAME_H, width - AVATAR - AVATAR_GAP, doc.height + 2.0 * BOX_PAD.1);
+                            let bubble = Rect::new(
+                                column,
+                                top + NAME_H,
+                                width - AVATAR - AVATAR_GAP,
+                                doc.height + 2.0 * BOX_PAD.1,
+                            );
                             p.bordered(bubble, t.surface, theme::RADIUS, 1.0, t.border);
                             let origin = (bubble.x + BOX_PAD.0, bubble.y + BOX_PAD.1);
                             (origin, t.text, Rect::new(origin.0, origin.1, bubble.w - 2.0 * BOX_PAD.0, doc.height))
@@ -588,7 +654,9 @@ impl Chat {
                             let len = doc.texts.get(pos.2).map_or(0, |p| p.text.len());
                             Some(((pos.0, pos.1, pos.2, 0), (pos.0, pos.1, pos.2, len)))
                         }
-                        _ if ui.mods.shift_key() => self.selection.map(|(anchor, _)| (anchor, pos)).or(Some((pos, pos))),
+                        _ if ui.mods.shift_key() => {
+                            self.selection.map(|(anchor, _)| (anchor, pos)).or(Some((pos, pos)))
+                        }
                         _ => Some((pos, pos)),
                     };
                     self.dragging = ui.clicks == 1;
@@ -739,7 +807,13 @@ fn turn_buttons(p: &mut Painter, ui: &mut Ui, right: f32, y: f32, buttons: &Turn
 /// name beside it, in a column `width` wide: the member's name now, even
 /// when the reply used an older or shorter one. Returns where their bubble
 /// starts.
-fn speaker(p: &mut Painter, (cast, player, library): (&[CastMember], Option<&Player>, &LibraryView), name: &str, (x, top): (f32, f32), width: f32) -> f32 {
+fn speaker(
+    p: &mut Painter,
+    (cast, player, library): (&[CastMember], Option<&Player>, &LibraryView),
+    name: &str,
+    (x, top): (f32, f32),
+    width: f32,
+) -> f32 {
     let member = names::member(cast, player, name).map(|i| &cast[i]);
     let path = member.and_then(|m| library.portrait_path(&m.portrait));
     let name = member.map_or(name, |m| m.name.as_str());
@@ -763,7 +837,16 @@ fn part_height(part: &Part, doc: &Doc) -> f32 {
 /// Height of `entry`: `edit_h` while it is being edited, otherwise its
 /// laid-out height, plus the actions row when it is a boxed turn anchor.
 #[allow(clippy::too_many_arguments, reason = "layout inputs; a struct would only rename them")]
-fn entry_height(entry: &mut Entry, edit_h: Option<f32>, anchor: bool, p: &Painter, width: f32, live: bool, story: bool, view: ReasoningView) -> f32 {
+fn entry_height(
+    entry: &mut Entry,
+    edit_h: Option<f32>,
+    anchor: bool,
+    p: &Painter,
+    width: f32,
+    live: bool,
+    story: bool,
+    view: ReasoningView,
+) -> f32 {
     if let Some(height) = edit_h {
         return height;
     }
@@ -812,7 +895,12 @@ fn toggle_row(p: &mut Painter, ui: &mut Ui, origin: (f32, f32), row: &Toggle<'_>
 }
 
 /// The part of `doc` (entry `entry`, document `doc_id`) inside the selection.
-fn selected_range(selection: Option<(SelPos, SelPos)>, entry: usize, doc_id: u8, doc: &Doc) -> Option<((usize, usize), (usize, usize))> {
+fn selected_range(
+    selection: Option<(SelPos, SelPos)>,
+    entry: usize,
+    doc_id: u8,
+    doc: &Doc,
+) -> Option<((usize, usize), (usize, usize))> {
     let (a, b) = selection?;
     if a == b || (entry, doc_id) < (a.0, a.1) || (entry, doc_id) > (b.0, b.1) {
         return None;
@@ -832,7 +920,11 @@ fn draw_empty(p: &mut Painter, ui: &mut Ui, view: Rect, story: Option<(&str, Opt
     let wrap = Some((view.w - 64.0).min(520.0));
     let (title, subtitle, mut y) = if let Some((name, path)) = story {
         portrait(p, path, name, Rect::new(cx - 36.0, top, 72.0, 72.0), theme::RADIUS);
-        (name, "Your story begins here. Say where you are and who you meet: the characters answer, and anyone not cast yet is created.", top + 92.0)
+        (
+            name,
+            "Your story begins here. Say where you are and who you meet: the characters answer, and anyone not cast yet is created.",
+            top + 92.0,
+        )
     } else {
         logo(p, Rect::new(cx - 18.0, top, 36.0, 36.0));
         ("Pick a world to play", "Stories happen in worlds: create one, or choose one and press Play.", top + 56.0)

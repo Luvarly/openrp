@@ -5,8 +5,8 @@
 
 use std::fmt::Write as _;
 
-use serde_json::json;
 use openrp_core::{Role, Session};
+use serde_json::json;
 
 use super::tools::{self, Part};
 
@@ -78,7 +78,8 @@ pub fn jsonl(session: &Session, world: &str) -> String {
     // Messages carry no time of their own: the story's start stands in.
     let date = session.created.saturating_mul(1000);
     let character = session.cast.first().map_or(world, |m| m.name.as_str());
-    let mut out = json!({ "user_name": player, "character_name": character, "create_date": date, "chat_metadata": {} }).to_string();
+    let mut out = json!({ "user_name": player, "character_name": character, "create_date": date, "chat_metadata": {} })
+        .to_string();
     for line in lines(session, player) {
         if let Line::Said(name, is_user, text) = line {
             let message = json!({ "name": name, "is_user": is_user, "is_system": false, "send_date": date, "mes": text, "extra": {} });
@@ -108,7 +109,10 @@ mod tests {
             ..Session::default()
         };
         let text = text(&session, "Ard");
-        assert_eq!(text, "The Lantern\nIn Ard, played as Gale.\n\nMira: *wipes a glass* What'll it be?\n\nGale: Ale.\n");
+        assert_eq!(
+            text,
+            "The Lantern\nIn Ard, played as Gale.\n\nMira: *wipes a glass* What'll it be?\n\nGale: Ale.\n"
+        );
 
         let chat = jsonl(&session, "Ard");
         let lines: Vec<serde_json::Value> = chat.lines().map(|l| serde_json::from_str(l).unwrap()).collect();

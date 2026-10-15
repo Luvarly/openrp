@@ -95,9 +95,14 @@ impl Chat {
                 let items = self
                     .models
                     .iter()
-                    .map(|m| MenuItem { selected: m.id == self.model, search: m.id.clone(), ..MenuItem::new(model_label(m), &price(m)) })
+                    .map(|m| MenuItem {
+                        selected: m.id == self.model,
+                        search: m.id.clone(),
+                        ..MenuItem::new(model_label(m), &price(m))
+                    })
                     .collect();
-                let mut content = content(anchors[0], 360.0, false, (&models(self.models.len()), "Input / output per 1M"), items);
+                let mut content =
+                    content(anchors[0], 360.0, false, (&models(self.models.len()), "Input / output per 1M"), items);
                 if let Some(error) = &self.models_error {
                     content.empty = format!("{error} Trying again soon.");
                 }
@@ -112,7 +117,8 @@ impl Chat {
                 content(anchors[1], 280.0, false, ("Reasoning effort", ""), items)
             }
             Menu::Commands => {
-                let items = self.commands().into_iter().map(|c| MenuItem::new(&format!("/{}", c.name()), c.detail())).collect();
+                let items =
+                    self.commands().into_iter().map(|c| MenuItem::new(&format!("/{}", c.name()), c.detail())).collect();
                 content(anchors[2], 320.0, false, ("Commands", "Tab to complete"), items)
             }
             Menu::Cast => content(anchors[3], 240.0, true, ("Add to the cast", ""), Self::cast_menu()),
@@ -168,7 +174,8 @@ impl Chat {
                 content(self.menu_anchor, 320.0, true, (&placeholder, "Play as"), items)
             }
             Menu::UtilityModel => {
-                let same = MenuItem { selected: self.utility_model.is_none(), ..MenuItem::new("Same as the story", "") };
+                let same =
+                    MenuItem { selected: self.utility_model.is_none(), ..MenuItem::new("Same as the story", "") };
                 let items = std::iter::once(same)
                     .chain(self.models.iter().map(|m| MenuItem {
                         selected: self.utility_model.as_deref() == Some(m.id.as_str()),
@@ -183,7 +190,13 @@ impl Chat {
 
     /// Draws the open menu (if any) and applies a choice. `anchors`: see
     /// [`Chat::menu_content`].
-    pub(super) fn draw_open_menu(&mut self, p: &mut Painter, ui: &mut Ui, anchors: [Rect; 4], actions: &mut Vec<Action>) {
+    pub(super) fn draw_open_menu(
+        &mut self,
+        p: &mut Painter,
+        ui: &mut Ui,
+        anchors: [Rect; 4],
+        actions: &mut Vec<Action>,
+    ) {
         let Some(menu) = self.menu else {
             (self.menu_rect, self.menu_seen) = (None, None);
             return;
@@ -195,7 +208,11 @@ impl Chat {
             (self.menu_pick, self.menu_keyed) = (0, false);
         }
         let content = self.menu_content(menu, anchors);
-        let rows = if menu.searchable() { search(&content.items, self.menu_query.text()) } else { (0..content.items.len()).collect() };
+        let rows = if menu.searchable() {
+            search(&content.items, self.menu_query.text())
+        } else {
+            (0..content.items.len()).collect()
+        };
         if let Some(row) = self.draw_menu(p, ui, &content, &rows, menu.searchable()) {
             ui.released = false;
             self.choose(menu, rows[row], actions);
@@ -210,7 +227,13 @@ impl Chat {
     /// Keys for an open searched menu: typing searches, the arrows move,
     /// Enter picks, Esc clears the search and then closes. Returns `false`
     /// for keys it does not use.
-    pub(super) fn menu_key(&mut self, event: &KeyEvent, mods: ModifiersState, cb: &mut Option<Clipboard>, actions: &mut Vec<Action>) -> bool {
+    pub(super) fn menu_key(
+        &mut self,
+        event: &KeyEvent,
+        mods: ModifiersState,
+        cb: &mut Option<Clipboard>,
+        actions: &mut Vec<Action>,
+    ) -> bool {
         let Some(menu) = self.menu.filter(|m| m.searchable()) else { return false };
         match &event.logical_key {
             Key::Named(NamedKey::Escape) if !self.menu_query.text().is_empty() => {
@@ -304,7 +327,14 @@ impl Chat {
     /// Draws `content` as a menu next to its anchor (below it, or above),
     /// showing `rows` of its items, and a search field above them when
     /// `searched`. Returns the clicked row (in `rows`).
-    fn draw_menu(&mut self, p: &mut Painter, ui: &mut Ui, content: &Content, rows: &[usize], searched: bool) -> Option<usize> {
+    fn draw_menu(
+        &mut self,
+        p: &mut Painter,
+        ui: &mut Ui,
+        content: &Content,
+        rows: &[usize],
+        searched: bool,
+    ) -> Option<usize> {
         let t = p.theme;
         let (header_h, pad) = (if searched { 38.0 } else { 30.0 }, 4.0);
         let content_h = rows.len().max(1) as f32 * ROW_H;
@@ -328,14 +358,19 @@ impl Chat {
             let note = p.layout(&note, theme::CAPTION, None);
             p.text(&note, area.right() - 12.0 - note.width(), area.y + (header_h - note.height()) * 0.5, t.text_faint);
             let field_w = area.w - 36.0 - note.width();
-            let (text, color) = if query.is_empty() { (content.header.0.as_str(), t.text_faint) } else { (query, t.text) };
+            let (text, color) =
+                if query.is_empty() { (content.header.0.as_str(), t.text_faint) } else { (query, t.text) };
             let mut layout = p.layout(text, theme::SMALL, None);
             let caret_x = if query.is_empty() { 0.0 } else { layout.caret(self.menu_query.cursor()).0 };
             layout.truncate(p.fonts, field_w);
             let origin = (area.x + 12.0, area.y + (header_h - layout.height()) * 0.5);
             p.text(&layout, origin.0, origin.1, color);
             if ui.caret_visible() && caret_x <= field_w {
-                p.rect(Rect::new(origin.0 + caret_x - 1.0, origin.1 + 2.0, 2.0, layout.line_height() - 4.0), t.accent, 0.0);
+                p.rect(
+                    Rect::new(origin.0 + caret_x - 1.0, origin.1 + 2.0, 2.0, layout.line_height() - 4.0),
+                    t.accent,
+                    0.0,
+                );
             }
         } else {
             p.label(&content.header.0, theme::CAPTION, area.x + 12.0, area.y + 9.0, t.text_faint);
@@ -374,7 +409,8 @@ impl Chat {
             let item = &content.items[index];
             let hovered = ui.hovered(row) && list.contains(ui.mouse);
             // The row Enter would pick is highlighted.
-            let picked = (self.menu == Some(Menu::Commands) && i == self.command_pick) || (searched && self.menu_keyed && i == self.menu_pick);
+            let picked = (self.menu == Some(Menu::Commands) && i == self.command_pick)
+                || (searched && self.menu_keyed && i == self.menu_pick);
             let hover = ui.anim(id(("menu", &content.header.0, i)), f32::from(u8::from(hovered || picked)));
             p.rect(row, fade(t.hover, hover), theme::RADIUS_SM);
 
@@ -420,8 +456,16 @@ mod tests {
 
     #[test]
     fn menus_are_searched_by_name_first() {
-        let item = |label: &str, detail: &str, search: &str| MenuItem { search: search.to_owned(), ..MenuItem::new(label, detail) };
-        let items = [item("Mira", "barkeep, v2", "fantasy"), item("Rex", "", "clone army"), item("Old Mira", "", ""), item("Kira", "mira's sister", "")];
+        let item = |label: &str, detail: &str, search: &str| MenuItem {
+            search: search.to_owned(),
+            ..MenuItem::new(label, detail)
+        };
+        let items = [
+            item("Mira", "barkeep, v2", "fantasy"),
+            item("Rex", "", "clone army"),
+            item("Old Mira", "", ""),
+            item("Kira", "mira's sister", ""),
+        ];
         assert_eq!(search(&items, ""), [0, 1, 2, 3]);
         assert_eq!(search(&items, "mira"), [0, 2, 3], "names first, then comments");
         assert_eq!(search(&items, "MIRA fantasy"), [0], "every word, across name and tags");
@@ -431,9 +475,18 @@ mod tests {
 
     #[test]
     fn the_cast_is_picked_from_a_search() {
-        let character = |id: &str, name: &str, comment: &str| openrp_core::Character { id: id.into(), name: name.into(), comment: comment.into(), ..Default::default() };
+        let character = |id: &str, name: &str, comment: &str| openrp_core::Character {
+            id: id.into(),
+            name: name.into(),
+            comment: comment.into(),
+            ..Default::default()
+        };
         let mut chat = Chat::new(None, Reasoning::Auto, Vec::new());
-        let library = vec![character("a", "Mira", "barkeep v1"), character("b", "Mira", "barkeep v2, darker"), character("c", "Rex", "")];
+        let library = vec![
+            character("a", "Mira", "barkeep v1"),
+            character("b", "Mira", "barkeep v2, darker"),
+            character("c", "Rex", ""),
+        ];
         chat.library_loaded(Vec::new(), library, Vec::new(), openrp_core::Portraits::at("p".into()));
         chat.play("w".into());
         chat.current().player = Some(openrp_core::Player { name: "Gale".into(), ..Default::default() });

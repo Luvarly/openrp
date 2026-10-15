@@ -232,7 +232,14 @@ impl TextLayout {
     /// ranges); text outside every span uses `base` with ink 0. Line metrics
     /// always come from `base`.
     #[must_use]
-    pub fn rich(fonts: &Fonts, text: &str, spans: &[(Range<usize>, Run)], base: Style, max_width: Option<f32>, scale: f32) -> Self {
+    pub fn rich(
+        fonts: &Fonts,
+        text: &str,
+        spans: &[(Range<usize>, Run)],
+        base: Style,
+        max_width: Option<f32>,
+        scale: f32,
+    ) -> Self {
         let primary = fonts.face(base.font);
         let px = base.size * scale;
         let (ascent, descent) = primary.vertical_metrics();
@@ -375,14 +382,22 @@ impl TextLayout {
     fn x_on_line(&self, row: usize, byte: usize) -> f32 {
         let line = self.lines[row];
         let glyphs = &self.glyphs[line.start as usize..line.end as usize];
-        let x = glyphs.iter().find(|g| g.byte as usize >= byte).map_or_else(|| glyphs.last().map_or(0.0, |g| g.x + g.advance), |g| g.x);
+        let x = glyphs
+            .iter()
+            .find(|g| g.byte as usize >= byte)
+            .map_or_else(|| glyphs.last().map_or(0.0, |g| g.x + g.advance), |g| g.x);
         x / self.scale
     }
 
     /// The highlight of the bytes `from..to` on each visual line, as
     /// logical `(x0, x1, y)`. A highlight that runs on past a line's end
     /// (or, with `continues`, past the text's end) gets a small tail there.
-    pub fn selection_spans(&self, from: usize, to: usize, continues: bool) -> impl Iterator<Item = (f32, f32, f32)> + '_ {
+    pub fn selection_spans(
+        &self,
+        from: usize,
+        to: usize,
+        continues: bool,
+    ) -> impl Iterator<Item = (f32, f32, f32)> + '_ {
         let line_h = self.line_height();
         self.lines.iter().enumerate().filter_map(move |(row, line)| {
             let (start, end) = (line.byte_start as usize, line.byte_end as usize);
@@ -402,7 +417,10 @@ impl TextLayout {
         let row = ((y / self.line_height()).floor().max(0.0) as usize).min(self.lines.len() - 1);
         let line = self.lines[row];
         let x = x * self.scale;
-        self.glyphs[line.start as usize..line.end as usize].iter().find(|g| g.x + g.advance * 0.5 > x).map_or(line.byte_end, |g| g.byte) as usize
+        self.glyphs[line.start as usize..line.end as usize]
+            .iter()
+            .find(|g| g.x + g.advance * 0.5 > x)
+            .map_or(line.byte_end, |g| g.byte) as usize
     }
 
     /// The link number (as given in [`Run::link`], minus one) of the glyph
@@ -414,14 +432,18 @@ impl TextLayout {
         }
         let line = self.lines.get((y / self.line_height()) as usize)?;
         let x = x * self.scale;
-        let glyph = self.glyphs[line.start as usize..line.end as usize].iter().find(|g| x >= g.x && x < g.x + g.advance)?;
+        let glyph =
+            self.glyphs[line.start as usize..line.end as usize].iter().find(|g| x >= g.x && x < g.x + g.advance)?;
         self.runs[usize::from(glyph.run)].link.checked_sub(1)
     }
 
     /// The source byte range of each visual line, with its top `y` in
     /// logical pixels. Used to draw selections.
     pub fn line_spans(&self) -> impl Iterator<Item = (usize, usize, f32)> + '_ {
-        self.lines.iter().enumerate().map(|(row, l)| (l.byte_start as usize, l.byte_end as usize, row as f32 * self.line_height()))
+        self.lines
+            .iter()
+            .enumerate()
+            .map(|(row, l)| (l.byte_start as usize, l.byte_end as usize, row as f32 * self.line_height()))
     }
 
     /// Stretches of decorated runs, one per line and run.
@@ -639,13 +661,21 @@ impl TextLayout {
                         let (w, h) = (f32::from(entry.w), f32::from(entry.h));
                         let gx = pen + f32::from(entry.xmin);
                         let gy = baseline - h - f32::from(entry.ymin);
-                        emit(PlacedGlyph { rect: [gx / s, gy / s, w / s, h / s], uv: [f32::from(entry.x), f32::from(entry.y), w, h], ink, color });
+                        emit(PlacedGlyph {
+                            rect: [gx / s, gy / s, w / s, h / s],
+                            uv: [f32::from(entry.x), f32::from(entry.y), w, h],
+                            ink,
+                            color,
+                        });
                     }
                     true
                 };
-                let layers = if glyph.font == FontId::EMOJI { atlas.layers(fonts, glyph.font, glyph.index) } else { None };
+                let layers =
+                    if glyph.font == FontId::EMOJI { atlas.layers(fonts, glyph.font, glyph.index) } else { None };
                 let ok = match layers {
-                    Some(layers) => layers.iter().all(|&(index, rgba)| place(atlas, index, rgba.map(|c| c.map(|v| f32::from(v) / 255.0)))),
+                    Some(layers) => layers
+                        .iter()
+                        .all(|&(index, rgba)| place(atlas, index, rgba.map(|c| c.map(|v| f32::from(v) / 255.0)))),
                     None => place(atlas, glyph.index, None),
                 };
                 if !ok {
@@ -738,7 +768,14 @@ mod tests {
         let fonts = Fonts::load();
         let link = Run { ink: 2, decoration: UNDERLINE, link: 1, ..Run::plain(FontId::REGULAR) };
         let code = Run { decoration: BACKGROUND, ..Run::plain(FontId::MONO) };
-        let l = TextLayout::rich(&fonts, "see docs and code", &[(4..8, link), (13..17, code)], Style::regular(16.0), None, 1.0);
+        let l = TextLayout::rich(
+            &fonts,
+            "see docs and code",
+            &[(4..8, link), (13..17, code)],
+            Style::regular(16.0),
+            None,
+            1.0,
+        );
         assert!(l.glyphs[4..8].iter().all(|g| g.run == 1));
         assert!(l.glyphs[13..17].iter().all(|g| g.font == FontId::MONO));
         let decorations = l.decorations();

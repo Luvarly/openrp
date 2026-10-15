@@ -49,7 +49,13 @@ impl Login {
     }
 
     /// Keyboard input.
-    pub fn key(&mut self, event: &KeyEvent, mods: ModifiersState, cb: &mut Option<Clipboard>, actions: &mut Vec<Action>) {
+    pub fn key(
+        &mut self,
+        event: &KeyEvent,
+        mods: ModifiersState,
+        cb: &mut Option<Clipboard>,
+        actions: &mut Vec<Action>,
+    ) {
         if self.form.key(event, mods, cb) {
             self.connect(actions);
         }

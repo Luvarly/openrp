@@ -295,7 +295,13 @@ impl StoryChange {
     /// while `remembered` was added to the memories; `None` when nothing
     /// changed. Tools never remove members or memories.
     #[must_use]
-    pub fn between(cast: &[CastMember], scene: &str, cast_after: &[CastMember], scene_after: &str, remembered: &[String]) -> Option<Self> {
+    pub fn between(
+        cast: &[CastMember],
+        scene: &str,
+        cast_after: &[CastMember],
+        scene_after: &str,
+        remembered: &[String],
+    ) -> Option<Self> {
         let changed = cast_after.iter().filter_map(|after| {
             let before = cast.iter().find(|m| m.id == after.id);
             (before != Some(after)).then(|| (before.cloned(), after.clone()))
@@ -397,7 +403,9 @@ impl StoredMessage {
     /// Tokens billed for this message and the replies swiped away under it.
     #[must_use]
     pub fn total_tokens(&self) -> u64 {
-        self.usage.input_tokens + self.usage.output_tokens + self.swipes.iter().flatten().map(Self::total_tokens).sum::<u64>()
+        self.usage.input_tokens
+            + self.usage.output_tokens
+            + self.swipes.iter().flatten().map(Self::total_tokens).sum::<u64>()
     }
 }
 
@@ -430,7 +438,8 @@ pub fn unix_now() -> u64 {
 #[must_use]
 pub fn new_id() -> String {
     static LAST: AtomicU64 = AtomicU64::new(0);
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX));
+    let now =
+        SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX));
     let mut last = LAST.load(Ordering::Relaxed);
     let id = loop {
         let next = now.max(last.saturating_add(1));
@@ -638,10 +647,9 @@ impl SessionStore {
             };
             // Unreadable files are skipped; `list` reports them.
             let Ok(session) = self.load(id) else { continue };
-            let found = session
-                .messages
-                .iter()
-                .find_map(|m| m.content.lines().find(|line| line.to_lowercase().contains(&needle)).map(|line| snippet(line, &needle)));
+            let found = session.messages.iter().find_map(|m| {
+                m.content.lines().find(|line| line.to_lowercase().contains(&needle)).map(|line| snippet(line, &needle))
+            });
             if let Some(snippet) = found {
                 hits.push(SearchHit { session: session.id, title: session.title, snippet, updated: session.updated });
             }
@@ -689,7 +697,11 @@ fn snippet(line: &str, needle: &str) -> String {
     let lower: Vec<char> = chars.iter().flat_map(|c| c.to_lowercase()).collect();
     let needle: Vec<char> = needle.chars().collect();
     // Case folding can change lengths; fall back to the start if it did.
-    let at = if lower.len() == chars.len() { lower.windows(needle.len()).position(|w| w == needle.as_slice()).unwrap_or(0) } else { 0 };
+    let at = if lower.len() == chars.len() {
+        lower.windows(needle.len()).position(|w| w == needle.as_slice()).unwrap_or(0)
+    } else {
+        0
+    };
     let start = at.saturating_sub(CONTEXT);
     let end = (at + needle.len() + CONTEXT).min(chars.len());
     let mut out: String = chars[start..end].iter().collect();
@@ -733,7 +745,8 @@ mod tests {
         // A story from before versions counted reviewed messages, not prompts.
         let mut old = session("o1", 1, 0.0);
         old.version = 0;
-        old.messages.extend([StoredMessage::new(Role::User, "again".into()), StoredMessage::new(Role::Assistant, "ok".into())]);
+        old.messages
+            .extend([StoredMessage::new(Role::User, "again".into()), StoredMessage::new(Role::Assistant, "ok".into())]);
         old.reviewed = 3;
         store.save(&old).unwrap();
         let upgraded = store.load("o1").unwrap();
@@ -772,7 +785,10 @@ mod tests {
         assert_eq!(aliases, ["Stranger", "Aragorn"]);
         // Back to an old name: it is no alias any more.
         rename(&mut name, &mut aliases, "stranger");
-        assert_eq!((name.as_str(), aliases.as_slice()), ("stranger", ["Aragorn".to_owned(), "Strider".to_owned()].as_slice()));
+        assert_eq!(
+            (name.as_str(), aliases.as_slice()),
+            ("stranger", ["Aragorn".to_owned(), "Strider".to_owned()].as_slice())
+        );
         rename(&mut name, &mut aliases, "  ");
         assert_eq!(name, "stranger", "never nameless");
     }
@@ -882,7 +898,8 @@ mod tests {
 
     #[test]
     fn story_changes_undo_what_nobody_changed_since() {
-        let member = |id: &str, present: bool| CastMember { id: id.into(), name: id.into(), present, ..CastMember::default() };
+        let member =
+            |id: &str, present: bool| CastMember { id: id.into(), name: id.into(), present, ..CastMember::default() };
         let cast = vec![member("a", true), member("b", false)];
         // The reply moved b in, added c and set the scene.
         let after = vec![member("a", true), member("b", true), member("c", true)];
@@ -897,20 +914,31 @@ mod tests {
         assert_eq!((undone, scene.as_str(), memories), (cast.clone(), "", vec!["Old.".to_owned()]));
 
         // The user moved c out, set the scene and deleted the memory since: those stay.
-        let (mut edited, mut scene) = (vec![member("a", true), member("b", true), member("c", false)], "Night.".to_owned());
+        let (mut edited, mut scene) =
+            (vec![member("a", true), member("b", true), member("c", false)], "Night.".to_owned());
         let mut memories = vec!["Old.".to_owned()];
         change.undo(&mut edited, &mut scene, &mut memories);
-        assert_eq!((edited, scene.as_str()), (vec![member("a", true), member("b", false), member("c", false)], "Night."));
+        assert_eq!(
+            (edited, scene.as_str()),
+            (vec![member("a", true), member("b", false), member("c", false)], "Night.")
+        );
         assert_eq!(memories, ["Old."]);
 
         // Redone (a swipe back to the reply), it applies again over what it undid.
         let (mut redone, mut scene, mut memories) = (cast.clone(), String::new(), vec!["Old.".to_owned()]);
         change.redo(&mut redone, &mut scene, &mut memories);
-        assert_eq!((redone, scene.as_str(), memories), (after.clone(), "Dusk.", vec!["Old.".to_owned(), "b owes a.".to_owned()]));
+        assert_eq!(
+            (redone, scene.as_str(), memories),
+            (after.clone(), "Dusk.", vec!["Old.".to_owned(), "b owes a.".to_owned()])
+        );
         // Not over what someone changed since.
         let (mut moved, mut scene) = (vec![member("a", true), member("b", true)], "Noon.".to_owned());
         change.redo(&mut moved, &mut scene, &mut Vec::new());
-        assert_eq!((moved.len(), scene.as_str()), (3, "Noon."), "c joins; b was moved in by hand already; the scene stays");
+        assert_eq!(
+            (moved.len(), scene.as_str()),
+            (3, "Noon."),
+            "c joins; b was moved in by hand already; the scene stays"
+        );
 
         let mut message = StoredMessage::new(Role::Assistant, String::new());
         message.change = Some(change);

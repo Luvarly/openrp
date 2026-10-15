@@ -240,15 +240,56 @@ impl From<World> for Record {
     fn from(w: World) -> Self {
         let locked = w.is_newer();
         let World { id, name, description, portrait, comment, tags, favorite, lore, created, updated, .. } = w;
-        Self { id, name, description, portrait, tags, comment, favorite, lore, created, updated, locked, ..Self::default() }
+        Self {
+            id,
+            name,
+            description,
+            portrait,
+            tags,
+            comment,
+            favorite,
+            lore,
+            created,
+            updated,
+            locked,
+            ..Self::default()
+        }
     }
 }
 
 impl From<Character> for Record {
     fn from(c: Character) -> Self {
         let locked = c.is_newer();
-        let Character { id, name, description, portrait, comment, greetings, examples, tags, favorite, lore, created, updated, .. } = c;
-        Self { id, name, description, portrait, greetings, examples, tags, comment, favorite, lore, created, updated, locked }
+        let Character {
+            id,
+            name,
+            description,
+            portrait,
+            comment,
+            greetings,
+            examples,
+            tags,
+            favorite,
+            lore,
+            created,
+            updated,
+            ..
+        } = c;
+        Self {
+            id,
+            name,
+            description,
+            portrait,
+            greetings,
+            examples,
+            tags,
+            comment,
+            favorite,
+            lore,
+            created,
+            updated,
+            locked,
+        }
     }
 }
 
@@ -464,7 +505,11 @@ impl Form {
     fn snapshot(&self) -> Record {
         let text = |index: usize| self.fields.text(index).trim().to_owned();
         let lore = (0..self.constant.len())
-            .map(|k| LoreEntry { keys: parse_list(self.fields.text(self.lore_keys(k))), content: text(self.lore_keys(k) + 1), constant: self.constant[k] })
+            .map(|k| LoreEntry {
+                keys: parse_list(self.fields.text(self.lore_keys(k))),
+                content: text(self.lore_keys(k) + 1),
+                constant: self.constant[k],
+            })
             .filter(|e| !e.content.is_empty())
             .collect();
         Record {
@@ -655,7 +700,13 @@ impl LibraryView {
     }
 
     /// Stores the records read from disk, most recently edited first.
-    pub fn loaded(&mut self, worlds: Vec<World>, characters: Vec<Character>, personas: Vec<Persona>, portraits: Portraits) {
+    pub fn loaded(
+        &mut self,
+        worlds: Vec<World>,
+        characters: Vec<Character>,
+        personas: Vec<Persona>,
+        portraits: Portraits,
+    ) {
         let sorted = |mut records: Vec<Record>| {
             records.sort_by_key(|r| std::cmp::Reverse(r.updated));
             records
@@ -799,7 +850,13 @@ impl LibraryView {
         let count = characters.len();
         let mut last = None;
         for character in characters {
-            let mut record = Record::from(Character { id: new_id(), created: now, updated: now, version: Character::VERSION, ..character });
+            let mut record = Record::from(Character {
+                id: new_id(),
+                created: now,
+                updated: now,
+                version: Character::VERSION,
+                ..character
+            });
             record.name = record.name.chars().take(NAME_LIMIT).collect();
             last = Some(record.clone());
             self.put(Kind::Character, record, actions);
@@ -830,7 +887,13 @@ impl LibraryView {
 
     /// Keyboard input. Returns `false` for keys the page does not use, so
     /// the caller may handle them.
-    pub fn key(&mut self, event: &KeyEvent, mods: ModifiersState, cb: &mut Option<Clipboard>, actions: &mut Vec<Action>) -> bool {
+    pub fn key(
+        &mut self,
+        event: &KeyEvent,
+        mods: ModifiersState,
+        cb: &mut Option<Clipboard>,
+        actions: &mut Vec<Action>,
+    ) -> bool {
         let Some(form) = &mut self.form else {
             // The index: typing filters it, and Esc clears the filter first.
             if event.logical_key == Key::Named(NamedKey::Escape) {
@@ -950,7 +1013,9 @@ impl LibraryView {
     #[must_use]
     pub fn form_menu(&self) -> Vec<FormAction> {
         match &self.form {
-            Some(form) if form.kind == Kind::Character => vec![FormAction::Duplicate, FormAction::Export, FormAction::Delete],
+            Some(form) if form.kind == Kind::Character => {
+                vec![FormAction::Duplicate, FormAction::Export, FormAction::Delete]
+            }
             Some(_) => vec![FormAction::Duplicate, FormAction::Delete],
             None => Vec::new(),
         }
@@ -979,7 +1044,13 @@ impl LibraryView {
         if !form.locked {
             self.put(kind, record.clone(), actions);
         }
-        let copy = Record { id: new_id(), name: format!("{} (copy)", record.name), created: unix_now(), locked: false, ..record };
+        let copy = Record {
+            id: new_id(),
+            name: format!("{} (copy)", record.name),
+            created: unix_now(),
+            locked: false,
+            ..record
+        };
         let mut form = Form::new(kind, Some(copy));
         form.new = true;
         self.form = Some(form);
@@ -1000,8 +1071,20 @@ impl LibraryView {
 
     /// Draws the page for `kind` into `area` (the whole main area).
     /// `stories` are those of the world being edited (see [`Self::open_world`]).
-    pub fn draw(&mut self, p: &mut Painter, ui: &mut Ui, area: Rect, kind: Kind, stories: &[Story], actions: &mut Vec<Action>) -> Option<Event> {
-        if self.form.is_some() { self.draw_form(p, ui, area, stories, actions) } else { self.draw_index(p, ui, area, kind, actions) }
+    pub fn draw(
+        &mut self,
+        p: &mut Painter,
+        ui: &mut Ui,
+        area: Rect,
+        kind: Kind,
+        stories: &[Story],
+        actions: &mut Vec<Action>,
+    ) -> Option<Event> {
+        if self.form.is_some() {
+            self.draw_form(p, ui, area, stories, actions)
+        } else {
+            self.draw_index(p, ui, area, kind, actions)
+        }
     }
 
     /// Scrolls the body below the header and returns it with the content
@@ -1035,7 +1118,8 @@ impl LibraryView {
             .enumerate()
             .filter(|(_, r)| {
                 let tags = lower_tags(r);
-                let text = || format!("{}\n{}\n{}\n{}", r.name, r.tags.join(" "), r.comment, r.description).to_lowercase();
+                let text =
+                    || format!("{}\n{}\n{}\n{}", r.name, r.tags.join(" "), r.comment, r.description).to_lowercase();
                 (!self.favorites || r.favorite)
                     && self.tags.iter().all(|t| tags.contains(t))
                     && (words.is_empty() || words.iter().all(|w| text().contains(w)))
@@ -1061,7 +1145,14 @@ impl LibraryView {
 
     /// Every saved record of `kind`, favourites first, then newest, narrowed
     /// by the filter, or an invitation to create (or import) the first.
-    fn draw_index(&mut self, p: &mut Painter, ui: &mut Ui, area: Rect, kind: Kind, actions: &mut Vec<Action>) -> Option<Event> {
+    fn draw_index(
+        &mut self,
+        p: &mut Painter,
+        ui: &mut Ui,
+        area: Rect,
+        kind: Kind,
+        actions: &mut Vec<Action>,
+    ) -> Option<Event> {
         let t = p.theme;
         if self.shown != Some(kind) {
             self.clear_filter();
@@ -1094,10 +1185,31 @@ impl LibraryView {
             let label = format!("Create a {}", kind.noun());
             if kind == Kind::Character {
                 // Or bring them from another app, as character cards.
-                create |= button(p, ui, Rect::new(x + width * 0.5 - 178.0, y, 170.0, 34.0), &label, ButtonStyle::Secondary, true);
-                import |= button(p, ui, Rect::new(x + width * 0.5 + 8.0, y, 170.0, 34.0), "Import a card", ButtonStyle::Secondary, !self.importing);
+                create |= button(
+                    p,
+                    ui,
+                    Rect::new(x + width * 0.5 - 178.0, y, 170.0, 34.0),
+                    &label,
+                    ButtonStyle::Secondary,
+                    true,
+                );
+                import |= button(
+                    p,
+                    ui,
+                    Rect::new(x + width * 0.5 + 8.0, y, 170.0, 34.0),
+                    "Import a card",
+                    ButtonStyle::Secondary,
+                    !self.importing,
+                );
             } else {
-                create |= button(p, ui, Rect::new(x + (width - 170.0) * 0.5, y, 170.0, 34.0), &label, ButtonStyle::Secondary, true);
+                create |= button(
+                    p,
+                    ui,
+                    Rect::new(x + (width - 170.0) * 0.5, y, 170.0, 34.0),
+                    &label,
+                    ButtonStyle::Secondary,
+                    true,
+                );
             }
         }
         if create {
@@ -1122,7 +1234,8 @@ impl LibraryView {
 
         // The filter: typing anywhere on the page goes here.
         let total = self.list(kind).len();
-        let filter = self.filter.get_or_insert_with(|| Fields::new([Editor::restricted(120, |c| !c.is_control())], [false]));
+        let filter =
+            self.filter.get_or_insert_with(|| Fields::new([Editor::restricted(120, |c| !c.is_control())], [false]));
         let field = Rect::new(x, y, width, 40.0);
         let layout = filter.layout(p, 0, width);
         let hint = format!("Filter by name, tag, comment or description ({total})");
@@ -1130,7 +1243,12 @@ impl LibraryView {
         let narrowed = self.favorites || !self.tags.is_empty() || !filter.text(0).trim().is_empty();
         if narrowed {
             let count = p.layout(&format!("{} of {total}", rows.len()), theme::SMALL, None);
-            p.text(&count, field.right() - FIELD_PAD.0 - count.width(), field.y + (field.h - count.height()) * 0.5, t.text_faint);
+            p.text(
+                &count,
+                field.right() - FIELD_PAD.0 - count.width(),
+                field.y + (field.h - count.height()) * 0.5,
+                t.text_faint,
+            );
         }
         y += field.h + 10.0;
 
@@ -1154,7 +1272,11 @@ impl LibraryView {
             drawn = true;
             let hovered = interactive && ui.hovered(chip_rect);
             let hover = ui.anim(id(("chip", &label)), f32::from(u8::from(hovered)));
-            let (fill, border) = if selected { (fade(t.accent, 0.16 + 0.06 * hover), fade(t.accent, 0.7)) } else { (fade(t.hover, hover), t.border_strong) };
+            let (fill, border) = if selected {
+                (fade(t.accent, 0.16 + 0.06 * hover), fade(t.accent, 0.7))
+            } else {
+                (fade(t.hover, hover), t.border_strong)
+            };
             p.bordered(chip_rect, fill, CHIP_H * 0.5, 1.0, border);
             let color = if selected { t.text } else { mix(t.text_muted, t.text, hover) };
             p.text(&text, chip_rect.x + 11.0, chip_rect.y + (CHIP_H - text.height()) * 0.5, color);
@@ -1172,7 +1294,14 @@ impl LibraryView {
         let (mut opened, mut play, mut star, mut clear) = (None, None, None, false);
         if rows.is_empty() {
             p.label(&format!("No {} match.", kind.plural().to_lowercase()), theme::SMALL, x, y + 8.0, t.text_muted);
-            clear = button(p, ui, Rect::new(x + width - 110.0, y + 2.0, 110.0, 30.0), "Clear filter", ButtonStyle::Ghost, interactive);
+            clear = button(
+                p,
+                ui,
+                Rect::new(x + width - 110.0, y + 2.0, 110.0, 30.0),
+                "Clear filter",
+                ButtonStyle::Ghost,
+                interactive,
+            );
             y += 40.0;
         }
         for &index in &rows {
@@ -1211,7 +1340,13 @@ impl LibraryView {
                     p.rect(star_rect, t.active, theme::RADIUS_SM);
                     ui.cursor = CursorIcon::Pointer;
                 }
-                let color = if record.favorite { t.accent } else if on_star { t.text } else { t.text_faint };
+                let color = if record.favorite {
+                    t.accent
+                } else if on_star {
+                    t.text
+                } else {
+                    t.text_faint
+                };
                 p.label_centered(if record.favorite { "★" } else { "☆" }, Style::regular(16.0), star_rect, color);
                 if on_star && ui.clicked(star_rect) {
                     star = Some(record.id.clone());
@@ -1283,7 +1418,14 @@ impl LibraryView {
     /// The open form: portrait, name, tags and description, the sections,
     /// and for a saved world the stories played in it; Save, Play and (for
     /// characters) Generate in the header, the rest in its ⋯ menu.
-    fn draw_form(&mut self, p: &mut Painter, ui: &mut Ui, area: Rect, stories: &[Story], actions: &mut Vec<Action>) -> Option<Event> {
+    fn draw_form(
+        &mut self,
+        p: &mut Painter,
+        ui: &mut Ui,
+        area: Rect,
+        stories: &[Story],
+        actions: &mut Vec<Action>,
+    ) -> Option<Event> {
         let t = p.theme;
         let (body, x, width) = self.body(ui, area);
         let scroll = self.scroll;
@@ -1388,7 +1530,15 @@ impl LibraryView {
         p.label("Name", theme::LABEL, fx, fy, t.text);
         let name = form.fields.layout(p, NAME, fw);
         let name_h = name.line_height() + 2.0 * FIELD_PAD.1;
-        form.fields.draw(NAME, p, ui, Rect::new(fx, fy + 24.0, fw, name_h), name, &format!("Name this {}", kind.noun()), interactive);
+        form.fields.draw(
+            NAME,
+            p,
+            ui,
+            Rect::new(fx, fy + 24.0, fw, name_h),
+            name,
+            &format!("Name this {}", kind.noun()),
+            interactive,
+        );
         fy += 24.0 + name_h + 14.0;
         // Tags and the private comment side by side, under the name.
         let half = ((fw - 12.0) * 0.5).floor();
@@ -1401,7 +1551,15 @@ impl LibraryView {
         let comment = form.fields.layout(p, COMMENT, half);
         let row_h = tags.height().max(comment.height()) + 2.0 * FIELD_PAD.1;
         form.fields.draw(TAGS, p, ui, Rect::new(fx, fy + 24.0, half, row_h), tags, "e.g. fantasy, mentor", interactive);
-        form.fields.draw(COMMENT, p, ui, Rect::new(comment_x, fy + 24.0, half, row_h), comment, "To tell it apart", interactive);
+        form.fields.draw(
+            COMMENT,
+            p,
+            ui,
+            Rect::new(comment_x, fy + 24.0, half, row_h),
+            comment,
+            "To tell it apart",
+            interactive,
+        );
         fy += 24.0 + row_h + 10.0;
         let line = |text: &str, painter: &mut Painter, color| {
             let mut text = painter.layout(text, theme::TINY, None);
@@ -1411,7 +1569,11 @@ impl LibraryView {
         if let Some(error) = &form.generate_error {
             line(error, p, t.danger);
         } else if form.locked {
-            line(&format!("Saved by a newer version of OpenRP: update OpenRP to change this {}.", kind.noun()), p, t.danger);
+            line(
+                &format!("Saved by a newer version of OpenRP: update OpenRP to change this {}.", kind.noun()),
+                p,
+                t.danger,
+            );
         } else if form.confirm_discard {
             line("Unsaved changes: Esc again discards them.", p, t.danger);
         } else {
@@ -1430,7 +1592,15 @@ impl LibraryView {
         y += 24.0;
         let description = form.fields.layout(p, DESCRIPTION, width);
         let description_h = (description.height() + 2.0 * FIELD_PAD.1).max(DESCRIPTION_MIN_H);
-        form.fields.draw(DESCRIPTION, p, ui, Rect::new(x, y, width, description_h), description, kind.hint(), interactive);
+        form.fields.draw(
+            DESCRIPTION,
+            p,
+            ui,
+            Rect::new(x, y, width, description_h),
+            description,
+            kind.hint(),
+            interactive,
+        );
         y += description_h + 20.0;
 
         // The sections, each a row that opens and closes it.
@@ -1444,11 +1614,13 @@ impl LibraryView {
                     2 => "First message and 1 alternate".to_owned(),
                     count => format!("First message and {} alternates", count - 1),
                 },
-                Section::Examples => match form.fields.text(EXAMPLES).lines().filter(|l| !l.trim().is_empty()).count() {
-                    0 => "None yet".to_owned(),
-                    1 => "1 line".to_owned(),
-                    count => format!("{count} lines"),
-                },
+                Section::Examples => {
+                    match form.fields.text(EXAMPLES).lines().filter(|l| !l.trim().is_empty()).count() {
+                        0 => "None yet".to_owned(),
+                        1 => "1 line".to_owned(),
+                        count => format!("{count} lines"),
+                    }
+                }
                 Section::Lore => match form.constant.len() {
                     0 => "None yet".to_owned(),
                     1 => "1 entry".to_owned(),
@@ -1491,10 +1663,17 @@ impl LibraryView {
                 y += STORY_H + 4.0;
                 let hovered = interactive && ui.hovered(row);
                 let hover = ui.anim(id(("story", story.id)), f32::from(u8::from(hovered)));
-                p.bordered(row, mix(t.surface, t.hover, hover), theme::RADIUS_SM, 1.0, mix(t.border, t.border_strong, hover));
+                p.bordered(
+                    row,
+                    mix(t.surface, t.hover, hover),
+                    theme::RADIUS_SM,
+                    1.0,
+                    mix(t.border, t.border_strong, hover),
+                );
                 let age = p.layout(&crate::chat::ago(now, story.updated), theme::TINY, None);
                 p.text(&age, row.right() - 12.0 - age.width(), row.y + (STORY_H - age.height()) * 0.5, t.text_faint);
-                let mut title = p.layout(if story.title.is_empty() { "Untitled story" } else { &story.title }, theme::SMALL, None);
+                let mut title =
+                    p.layout(if story.title.is_empty() { "Untitled story" } else { &story.title }, theme::SMALL, None);
                 title.truncate(p.fonts, row.w - 36.0 - age.width());
                 p.text(&title, row.x + 12.0, row.y + (STORY_H - title.height()) * 0.5, t.text);
                 if hovered {
@@ -1586,7 +1765,14 @@ impl Changes {
 
 /// Draws the open Greetings section from `y` in a column at `x`, `width`
 /// wide; returns where it ends.
-fn draw_greetings(form: &mut Form, p: &mut Painter, ui: &mut Ui, (x, y, width): (f32, f32, f32), interactive: bool, changes: &mut Changes) -> f32 {
+fn draw_greetings(
+    form: &mut Form,
+    p: &mut Painter,
+    ui: &mut Ui,
+    (x, y, width): (f32, f32, f32),
+    interactive: bool,
+    changes: &mut Changes,
+) -> f32 {
     let t = p.theme;
     let mut y = y;
     let field_w = width - REMOVE - 8.0;
@@ -1597,29 +1783,59 @@ fn draw_greetings(form: &mut Form, p: &mut Painter, ui: &mut Ui, (x, y, width): 
         let index = Form::greeting(k);
         let layout = form.fields.layout(p, index, field_w);
         let field_h = (layout.height() + 2.0 * FIELD_PAD.1).max(GREETING_MIN_H);
-        let hint = if k == 0 { "*She looks up from the bar.* What'll it be, {{user}}?" } else { "Another way the story could open" };
+        let hint = if k == 0 {
+            "*She looks up from the bar.* What'll it be, {{user}}?"
+        } else {
+            "Another way the story could open"
+        };
         form.fields.draw(index, p, ui, Rect::new(x, y, field_w, field_h), layout, hint, interactive);
         if button(p, ui, Rect::new(x + field_w + 8.0, y + 6.0, REMOVE, REMOVE), "×", ButtonStyle::Ghost, interactive) {
             changes.remove_greeting = Some(k);
         }
         y += field_h + 12.0;
     }
-    changes.add_greeting |= button(p, ui, Rect::new(x - 8.0, y, 130.0, 30.0), "+ Add greeting", ButtonStyle::Ghost, interactive);
-    y + 30.0 + hint_line(p, "Their first message opens a story they join before anyone speaks; the others can be swiped to. {{user}} is your character, {{char}} theirs.", (x, y + 36.0, width))
+    changes.add_greeting |=
+        button(p, ui, Rect::new(x - 8.0, y, 130.0, 30.0), "+ Add greeting", ButtonStyle::Ghost, interactive);
+    y + 30.0
+        + hint_line(
+            p,
+            "Their first message opens a story they join before anyone speaks; the others can be swiped to. {{user}} is your character, {{char}} theirs.",
+            (x, y + 36.0, width),
+        )
         + 6.0
 }
 
 /// Draws the open Example dialogue section; returns where it ends.
-fn draw_examples(form: &mut Form, p: &mut Painter, ui: &mut Ui, (x, y, width): (f32, f32, f32), interactive: bool) -> f32 {
+fn draw_examples(
+    form: &mut Form,
+    p: &mut Painter,
+    ui: &mut Ui,
+    (x, y, width): (f32, f32, f32),
+    interactive: bool,
+) -> f32 {
     let layout = form.fields.layout(p, EXAMPLES, width);
     let h = (layout.height() + 2.0 * FIELD_PAD.1).max(EXAMPLES_MIN_H);
     let hint = "<START>\n{{user}}: Seen anything strange?\n{{char}}: *leans in* Only you, stranger.";
     form.fields.draw(EXAMPLES, p, ui, Rect::new(x, y, width, h), layout, hint, interactive);
-    y + h + hint_line(p, "Sample lines in their voice. The AI learns how they talk from them; they never happen in the story.", (x, y + h + 8.0, width)) + 8.0
+    y + h
+        + hint_line(
+            p,
+            "Sample lines in their voice. The AI learns how they talk from them; they never happen in the story.",
+            (x, y + h + 8.0, width),
+        )
+        + 8.0
 }
 
 /// Draws the open Lore section; returns where it ends.
-fn draw_lore(form: &mut Form, p: &mut Painter, ui: &mut Ui, (x, y, width): (f32, f32, f32), interactive: bool, changes: &mut Changes, actions: &mut Vec<Action>) -> f32 {
+fn draw_lore(
+    form: &mut Form,
+    p: &mut Painter,
+    ui: &mut Ui,
+    (x, y, width): (f32, f32, f32),
+    interactive: bool,
+    changes: &mut Changes,
+    actions: &mut Vec<Action>,
+) -> f32 {
     let t = p.theme;
     let mut y = y;
     let toggle_w = 86.0;
@@ -1630,26 +1846,45 @@ fn draw_lore(form: &mut Form, p: &mut Painter, ui: &mut Ui, (x, y, width): (f32,
         let constant = form.constant[k];
         let layout = form.fields.layout(p, keys, keys_w);
         let keys_h = layout.height() + 2.0 * FIELD_PAD.1;
-        let hint = if constant { "Keys not needed: always read" } else { "Keys that bring it in, e.g. Lantern, the inn" };
+        let hint =
+            if constant { "Keys not needed: always read" } else { "Keys that bring it in, e.g. Lantern, the inn" };
         form.fields.draw(keys, p, ui, Rect::new(x, y, keys_w, keys_h), layout, hint, interactive);
         // Always: read whatever is said.
         let toggle = Rect::new(x + keys_w + 8.0, y + (keys_h - 30.0) * 0.5, toggle_w, 30.0);
-        let (label, style) = if constant { ("✓ Always", ButtonStyle::Secondary) } else { ("Always", ButtonStyle::Ghost) };
+        let (label, style) =
+            if constant { ("✓ Always", ButtonStyle::Secondary) } else { ("Always", ButtonStyle::Ghost) };
         if button(p, ui, toggle, label, style, interactive) {
             changes.constant = Some(k);
         }
-        if button(p, ui, Rect::new(x + column + 8.0, y + (keys_h - REMOVE) * 0.5, REMOVE, REMOVE), "×", ButtonStyle::Ghost, interactive) {
+        if button(
+            p,
+            ui,
+            Rect::new(x + column + 8.0, y + (keys_h - REMOVE) * 0.5, REMOVE, REMOVE),
+            "×",
+            ButtonStyle::Ghost,
+            interactive,
+        ) {
             changes.remove_lore = Some(k);
         }
         y += keys_h + 6.0;
         let layout = form.fields.layout(p, keys + 1, column);
         let content_h = (layout.height() + 2.0 * FIELD_PAD.1).max(LORE_MIN_H);
-        form.fields.draw(keys + 1, p, ui, Rect::new(x, y, column, content_h), layout, "What the AI should know when it comes up", interactive);
+        form.fields.draw(
+            keys + 1,
+            p,
+            ui,
+            Rect::new(x, y, column, content_h),
+            layout,
+            "What the AI should know when it comes up",
+            interactive,
+        );
         y += content_h + 18.0;
     }
-    changes.add_lore |= button(p, ui, Rect::new(x - 8.0, y, 112.0, 30.0), "+ Add entry", ButtonStyle::Ghost, interactive);
+    changes.add_lore |=
+        button(p, ui, Rect::new(x - 8.0, y, 112.0, 30.0), "+ Add entry", ButtonStyle::Ghost, interactive);
     let (label, import_w) = if form.importing { ("Importing…", 116.0) } else { ("Import lorebook…", 140.0) };
-    if button(p, ui, Rect::new(x + 108.0, y, import_w, 30.0), label, ButtonStyle::Ghost, interactive && !form.importing) {
+    if button(p, ui, Rect::new(x + 108.0, y, import_w, 30.0), label, ButtonStyle::Ghost, interactive && !form.importing)
+    {
         form.importing = true;
         form.import_error = None;
         actions.push(Action::ImportLore);
@@ -1660,7 +1895,11 @@ fn draw_lore(form: &mut Form, p: &mut Painter, ui: &mut Ui, (x, y, width): (f32,
         p.text(&text, x, y, t.danger);
         y += text.height() + 6.0;
     }
-    y + hint_line(p, "The AI reads an entry only while the latest turns mention one of its keys, so a big world costs little. A SillyTavern lorebook or a card's book can be imported.", (x, y, width))
+    y + hint_line(
+        p,
+        "The AI reads an entry only while the latest turns mention one of its keys, so a big world costs little. A SillyTavern lorebook or a card's book can be imported.",
+        (x, y, width),
+    )
 }
 
 /// Draws a faint hint at `(x, y)`, wrapped to `width`; returns its height.
@@ -1672,7 +1911,15 @@ fn hint_line(p: &mut Painter, text: &str, (x, y, width): (f32, f32, f32)) -> f32
 
 /// Draws a section's header row in `rect`: a hairline above, a chevron, its
 /// `title` and a `summary` on the right. Returns whether it was clicked.
-fn section_row(p: &mut Painter, ui: &mut Ui, rect: Rect, title: &str, summary: &str, open: bool, interactive: bool) -> bool {
+fn section_row(
+    p: &mut Painter,
+    ui: &mut Ui,
+    rect: Rect,
+    title: &str,
+    summary: &str,
+    open: bool,
+    interactive: bool,
+) -> bool {
     let t = p.theme;
     p.rect(Rect::new(rect.x, rect.y, rect.w, 1.0), t.border, 0.0);
     let row = Rect::new(rect.x - 8.0, rect.y + 6.0, rect.w + 16.0, rect.h - 8.0);
@@ -1756,7 +2003,10 @@ mod tests {
         view.save(&mut actions);
         assert!(view.form.is_none());
         let [Action::SaveWorld(w)] = &actions[..] else { panic!("not saved") };
-        assert_eq!((w.id.as_str(), w.description.as_str(), w.portrait.as_str(), w.created), ("a", "Twelve districts.", "face.png", 0));
+        assert_eq!(
+            (w.id.as_str(), w.description.as_str(), w.portrait.as_str(), w.created),
+            ("a", "Twelve districts.", "face.png", 0)
+        );
         assert_eq!(w.tags, ["dystopia", "games"], "trimmed, without repeats");
         assert_eq!(view.worlds[0].id, "a");
 
@@ -1816,13 +2066,26 @@ mod tests {
     #[test]
     fn greetings_and_lore_are_edited_in_sections() {
         let lore = vec![LoreEntry { keys: vec!["inn".into()], content: "Warm.".into(), constant: false }];
-        let mira = Character { id: "m".into(), name: "Mira".into(), greetings: vec!["Hi.".into()], lore, ..Character::default() };
+        let mira = Character {
+            id: "m".into(),
+            name: "Mira".into(),
+            greetings: vec!["Hi.".into()],
+            lore,
+            ..Character::default()
+        };
         let mut view = LibraryView::default();
         view.loaded(Vec::new(), vec![mira], Vec::new(), Portraits::at("p".into()));
         view.open_form(Kind::Character, "m");
         let form = view.form.as_mut().unwrap();
         assert!(!form.dirty(), "opened as saved");
-        assert_eq!((form.fields.text(Form::greeting(0)), form.fields.text(form.lore_keys(0)), form.fields.text(form.lore_keys(0) + 1)), ("Hi.", "inn", "Warm."));
+        assert_eq!(
+            (
+                form.fields.text(Form::greeting(0)),
+                form.fields.text(form.lore_keys(0)),
+                form.fields.text(form.lore_keys(0) + 1)
+            ),
+            ("Hi.", "inn", "Warm.")
+        );
 
         // A greeting added and filled, the entry made constant, a new one left empty.
         form.add_greeting();
@@ -1850,13 +2113,19 @@ mod tests {
 
         // A lorebook's entries join the open form, unsaved.
         form.importing = true;
-        view.lore_imported(Ok(vec![LoreEntry { keys: vec!["dragon".into()], content: "Big.".into(), constant: false }]));
+        view.lore_imported(Ok(vec![LoreEntry {
+            keys: vec!["dragon".into()],
+            content: "Big.".into(),
+            constant: false,
+        }]));
         let form = view.form.as_ref().unwrap();
         assert!(form.record().unwrap().lore.len() == 2 && form.open.contains(&Section::Lore));
         let mut actions = Vec::new();
         assert_eq!(view.form_menu(), [FormAction::Duplicate, FormAction::Export, FormAction::Delete]);
         view.form_menu_picked(FormAction::Export, &mut actions);
-        assert!(matches!(&actions[..], [Action::SaveCharacter(c), Action::ExportCard { character, .. }] if c.lore.len() == 2 && character.greetings == ["Back again?"]));
+        assert!(
+            matches!(&actions[..], [Action::SaveCharacter(c), Action::ExportCard { character, .. }] if c.lore.len() == 2 && character.greetings == ["Back again?"])
+        );
         assert!(!view.form.as_ref().unwrap().dirty(), "export saved it first");
     }
 
@@ -1871,10 +2140,18 @@ mod tests {
             ..Character::default()
         };
         let mut view = LibraryView::default();
-        let cast = vec![character("a", "Aria", &["Elf", "mage"], 3), character("b", "Bran", &["dwarf"], 2), character("c", "Cole", &["elf"], 1)];
+        let cast = vec![
+            character("a", "Aria", &["Elf", "mage"], 3),
+            character("b", "Bran", &["dwarf"], 2),
+            character("c", "Cole", &["elf"], 1),
+        ];
         view.loaded(Vec::new(), cast, Vec::new(), Portraits::at("p".into()));
         view.show(Kind::Character);
-        assert_eq!(view.rows(Kind::Character), (vec![0, 1, 2], vec!["Elf".to_owned(), "dwarf".to_owned(), "mage".to_owned()]), "most used tag first, as first written");
+        assert_eq!(
+            view.rows(Kind::Character),
+            (vec![0, 1, 2], vec!["Elf".to_owned(), "dwarf".to_owned(), "mage".to_owned()]),
+            "most used tag first, as first written"
+        );
 
         view.filter = Some(Fields::new([Editor::default()], [false]));
         view.filter.as_mut().unwrap().insert("about c");
@@ -1904,27 +2181,46 @@ mod tests {
         view.imported(vec![card], &mut actions);
         assert!(!view.importing);
         let [Action::SaveCharacter(saved)] = &actions[..] else { panic!("not saved") };
-        assert!(!saved.id.is_empty() && saved.name.chars().count() == NAME_LIMIT && saved.version == Character::VERSION);
+        assert!(
+            !saved.id.is_empty() && saved.name.chars().count() == NAME_LIMIT && saved.version == Character::VERSION
+        );
         assert!(view.form.as_ref().is_some_and(|f| f.id == saved.id), "one card opens to review");
 
         // Storing a cast member keeps the library's greetings and tags.
         let id = saved.id.clone();
-        let member = openrp_core::CastMember { id: id.clone(), name: "Nia".into(), examples: "Hm.".into(), ..openrp_core::CastMember::default() };
+        let member = openrp_core::CastMember {
+            id: id.clone(),
+            name: "Nia".into(),
+            examples: "Hm.".into(),
+            ..openrp_core::CastMember::default()
+        };
         view.store_character(&member, &mut actions);
         let stored = view.get(Kind::Character, &id).unwrap();
         assert!(stored.name == "Nia" && stored.greetings == ["Hello."] && stored.examples == "Hm.");
 
         // Several cards stay in the index.
         view.form = None;
-        view.imported(vec![Character { name: "A".into(), ..Character::default() }, Character { name: "B".into(), ..Character::default() }], &mut actions);
+        view.imported(
+            vec![
+                Character { name: "A".into(), ..Character::default() },
+                Character { name: "B".into(), ..Character::default() },
+            ],
+            &mut actions,
+        );
         assert!(view.form.is_none() && view.characters.len() == 3);
     }
 
     #[test]
     fn comments_find_records_but_stay_private() {
-        let mira = Character { id: "a".into(), name: "Mira".into(), comment: "v2, darker".into(), ..Character::default() };
+        let mira =
+            Character { id: "a".into(), name: "Mira".into(), comment: "v2, darker".into(), ..Character::default() };
         let mut view = LibraryView::default();
-        view.loaded(Vec::new(), vec![mira, Character { id: "b".into(), name: "Mira".into(), ..Character::default() }], Vec::new(), Portraits::at("p".into()));
+        view.loaded(
+            Vec::new(),
+            vec![mira, Character { id: "b".into(), name: "Mira".into(), ..Character::default() }],
+            Vec::new(),
+            Portraits::at("p".into()),
+        );
         view.show(Kind::Character);
         view.filter = Some(Fields::new([Editor::default()], [false]));
         view.filter.as_mut().unwrap().insert("darker");
@@ -1943,13 +2239,20 @@ mod tests {
     fn personas_are_saved_by_name() {
         let mut view = LibraryView::default();
         let starred = Persona { id: "p".into(), name: "Gale".into(), favorite: true, ..Persona::default() };
-        view.loaded(Vec::new(), Vec::new(), vec![Persona { id: "q".into(), name: "Ana".into(), ..Persona::default() }, starred], Portraits::at("p".into()));
+        view.loaded(
+            Vec::new(),
+            Vec::new(),
+            vec![Persona { id: "q".into(), name: "Ana".into(), ..Persona::default() }, starred],
+            Portraits::at("p".into()),
+        );
         assert_eq!(view.default_persona().map(|p| p.id.as_str()), Some("p"), "the starred one");
 
         // Saving under a name kept already updates that persona, star and all.
         let mut actions = Vec::new();
         view.save_persona(" gale ", "A hunter.", "gale.png", &mut actions);
-        assert!(matches!(&actions[..], [Action::SavePersona(p)] if p.id == "p" && p.favorite && p.description == "A hunter." && p.name == "gale"));
+        assert!(
+            matches!(&actions[..], [Action::SavePersona(p)] if p.id == "p" && p.favorite && p.description == "A hunter." && p.name == "gale")
+        );
         view.save_persona("Rue", "Quick.", "", &mut actions);
         assert_eq!(view.list(Kind::Persona).len(), 3);
         view.save_persona("  ", "Nobody.", "", &mut actions);

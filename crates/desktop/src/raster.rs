@@ -111,7 +111,10 @@ impl OutlineBuilder for Flattener {
         for i in 1..=n {
             let t = i as f32 / n as f32;
             let u = 1.0 - t;
-            self.push((u * u * p0.0 + 2.0 * u * t * p1.0 + t * t * p2.0, u * u * p0.1 + 2.0 * u * t * p1.1 + t * t * p2.1));
+            self.push((
+                u * u * p0.0 + 2.0 * u * t * p1.0 + t * t * p2.0,
+                u * u * p0.1 + 2.0 * u * t * p1.1 + t * t * p2.1,
+            ));
         }
     }
 

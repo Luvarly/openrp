@@ -82,7 +82,9 @@ pub(super) enum Subject {
 /// dropped, empty ones left out.
 fn memories(fields: &Fields) -> Vec<String> {
     (0..fields.count())
-        .map(|k| fields.text(k).trim().trim_start_matches(['-', '•', '*']).split_whitespace().collect::<Vec<_>>().join(" "))
+        .map(|k| {
+            fields.text(k).trim().trim_start_matches(['-', '•', '*']).split_whitespace().collect::<Vec<_>>().join(" ")
+        })
         .filter(|m| !m.is_empty())
         .collect()
 }
@@ -116,7 +118,16 @@ pub(super) struct CharacterForm {
 
 impl CharacterForm {
     fn new(conversation: u64, fields: Fields, subject: Subject, editing: bool) -> Self {
-        Self { conversation, fields, subject, editing, scroll: 0.0, portrait: String::new(), picking: false, pick_error: None }
+        Self {
+            conversation,
+            fields,
+            subject,
+            editing,
+            scroll: 0.0,
+            portrait: String::new(),
+            picking: false,
+            pick_error: None,
+        }
     }
 
     /// The image picker closed: `Ok(Some(name))` is a portrait copied in.
@@ -133,9 +144,11 @@ impl CharacterForm {
 /// The generator's answer as the name and description it made, or why
 /// there are none.
 fn made(result: Result<Option<ToolCall>, Error>) -> Result<(String, String), String> {
-    result
-        .map_err(|e| e.to_string())
-        .and_then(|call| call.as_ref().and_then(tools::generated).ok_or_else(|| "The model did not describe anyone. Try again.".to_owned()))
+    result.map_err(|e| e.to_string()).and_then(|call| {
+        call.as_ref()
+            .and_then(tools::generated)
+            .ok_or_else(|| "The model did not describe anyone. Try again.".to_owned())
+    })
 }
 
 /// Everything a worker thread needs to generate one character.
@@ -171,7 +184,8 @@ impl Chat {
             _ if needs => {
                 // The starred persona fills in by itself.
                 let persona = self.library.default_persona().cloned().unwrap_or_default();
-                let fields = Fields::new([name_editor(&persona.name), text_editor(&persona.description)], [false, true]);
+                let fields =
+                    Fields::new([name_editor(&persona.name), text_editor(&persona.description)], [false, true]);
                 let mut form = CharacterForm::new(current, fields, Subject::Player, false);
                 form.portrait = persona.portrait;
                 self.character_form = Some(form);
@@ -264,8 +278,13 @@ impl Chat {
     /// the tools tell characters apart by name.
     fn name_taken(&mut self, subject: &Subject, name: &str) -> bool {
         let conversation = self.current();
-        let player = *subject != Subject::Player && conversation.player.as_ref().is_some_and(|p| names::same(&p.name, name));
-        player || conversation.cast.iter().any(|m| names::same(&m.name, name) && !matches!(subject, Subject::Member(id) if *id == m.id))
+        let player =
+            *subject != Subject::Player && conversation.player.as_ref().is_some_and(|p| names::same(&p.name, name));
+        player
+            || conversation
+                .cast
+                .iter()
+                .any(|m| names::same(&m.name, name) && !matches!(subject, Subject::Member(id) if *id == m.id))
     }
 
     /// Applies the form, if it has a free name, and closes it; when
@@ -318,7 +337,14 @@ impl Chat {
                 }
             }
             Subject::NewMember => {
-                conversation.cast.push(CastMember { id: new_id(), name, description, portrait, present: true, ..CastMember::default() });
+                conversation.cast.push(CastMember {
+                    id: new_id(),
+                    name,
+                    description,
+                    portrait,
+                    present: true,
+                    ..CastMember::default()
+                });
             }
             Subject::Scene => conversation.scene = name,
             Subject::Note => conversation.note = name,
@@ -334,8 +360,13 @@ impl Chat {
 
     /// Asks the generator for someone matching `idea`.
     fn generate(&mut self, idea: String, actions: &mut Vec<Action>) {
-        let conversation = self.conversations.iter().find(|c| c.id == self.current).expect("the current conversation always exists");
-        let world = conversation.world.as_deref().and_then(|w| self.library.get(Kind::World, w)).map(|w| (w.name.as_str(), w.description.as_str()));
+        let conversation =
+            self.conversations.iter().find(|c| c.id == self.current).expect("the current conversation always exists");
+        let world = conversation
+            .world
+            .as_deref()
+            .and_then(|w| self.library.get(Kind::World, w))
+            .map(|w| (w.name.as_str(), w.description.as_str()));
         let cast: Vec<&str> = conversation.cast.iter().map(|m| m.name.as_str()).collect();
         let instructions = tools::generator_prompt(world, conversation.player.as_ref().map(|p| p.name.as_str()), &cast);
         let idea = if idea.is_empty() { tools::SURPRISE.to_owned() } else { idea };
@@ -355,10 +386,23 @@ impl Chat {
 
     /// Pushes a generator request for `conversation` (`None`: the library)
     /// and returns its id.
-    fn generate_job(&mut self, conversation: Option<u64>, instructions: String, idea: String, actions: &mut Vec<Action>) -> u64 {
+    fn generate_job(
+        &mut self,
+        conversation: Option<u64>,
+        instructions: String,
+        idea: String,
+        actions: &mut Vec<Action>,
+    ) -> u64 {
         let request = self.next_id();
         let (model, reasoning) = self.side_model();
-        actions.push(Action::GenerateCharacter(GenerateJob { conversation, request, model, reasoning, instructions, idea }));
+        actions.push(Action::GenerateCharacter(GenerateJob {
+            conversation,
+            request,
+            model,
+            reasoning,
+            instructions,
+            idea,
+        }));
         request
     }
 
@@ -366,7 +410,12 @@ impl Chat {
     /// the new member to review, or shows why it failed. Results for a
     /// form that was closed or changed since are dropped. `conversation`
     /// is `None` for the Characters page's form.
-    pub fn character_generated(&mut self, conversation: Option<u64>, request: u64, result: Result<Option<ToolCall>, Error>) {
+    pub fn character_generated(
+        &mut self,
+        conversation: Option<u64>,
+        request: u64,
+        result: Result<Option<ToolCall>, Error>,
+    ) {
         let Some(conversation) = conversation else {
             self.library.generated(request, made(result));
             return;
@@ -388,7 +437,13 @@ impl Chat {
 
     /// Keyboard input for the character form. Returns `false` when it is
     /// not open, so the composer gets the key.
-    pub(super) fn dialog_key(&mut self, event: &KeyEvent, mods: ModifiersState, cb: &mut Option<Clipboard>, actions: &mut Vec<Action>) -> bool {
+    pub(super) fn dialog_key(
+        &mut self,
+        event: &KeyEvent,
+        mods: ModifiersState,
+        cb: &mut Option<Clipboard>,
+        actions: &mut Vec<Action>,
+    ) -> bool {
         let primary = if cfg!(target_os = "macos") { mods.super_key() } else { mods.control_key() };
         let Some(form) = self.character_form() else {
             return false;
@@ -416,7 +471,8 @@ impl Chat {
     /// over it otherwise.
     pub(super) fn draw_character_form(&mut self, p: &mut Painter, ui: &mut Ui, area: Rect, actions: &mut Vec<Action>) {
         let t = p.theme;
-        let world = self.current().world.clone().and_then(|id| self.library.get(Kind::World, &id).map(|w| w.name.clone()));
+        let world =
+            self.current().world.clone().and_then(|id| self.library.get(Kind::World, &id).map(|w| w.name.clone()));
         let Some(form) = self.character_form() else {
             return;
         };
@@ -435,14 +491,18 @@ impl Chat {
         let single = subject.single();
         let taken = !single && !name.is_empty() && self.name_taken(&subject, &name);
         // Cast members and the user's character get a portrait beside their name.
-        let photo_path = matches!(subject, Subject::Member(_) | Subject::NewMember | Subject::Player).then(|| self.library.portrait_path(&photo));
+        let photo_path = matches!(subject, Subject::Member(_) | Subject::NewMember | Subject::Player)
+            .then(|| self.library.portrait_path(&photo));
         // Who the user plays: one of their personas, starred first, and
         // whether what is typed is kept as one.
         let (personas, more, kept) = if subject == Subject::Player {
             let choices = self.persona_choices();
             let more = choices.len().saturating_sub(PERSONA_CHIPS);
-            let personas: Vec<(Record, Option<String>)> =
-                choices.into_iter().take(PERSONA_CHIPS).map(|r| (r.clone(), self.library.portrait_path(&r.portrait))).collect();
+            let personas: Vec<(Record, Option<String>)> = choices
+                .into_iter()
+                .take(PERSONA_CHIPS)
+                .map(|r| (r.clone(), self.library.portrait_path(&r.portrait)))
+                .collect();
             let kept = (!name.is_empty()).then(|| match self.library.persona_named(&name) {
                 Some(r) if r.description == description && r.portrait == photo => Kept::Yes,
                 Some(_) => Kept::Changed,
@@ -522,7 +582,10 @@ impl Chat {
         let mut chips = Vec::with_capacity(personas.len() + 1);
         let (mut at_x, mut at_y) = (start, 0.0);
         // Each persona's chip, then one opening the rest, searched.
-        let chip_labels = personas.iter().map(|(record, path)| (record.name.clone(), path.is_some())).chain((more > 0).then(|| (format!("{more} more…"), false)));
+        let chip_labels = personas
+            .iter()
+            .map(|(record, path)| (record.name.clone(), path.is_some()))
+            .chain((more > 0).then(|| (format!("{more} more…"), false)));
         for (chip_label, has_face) in chip_labels {
             let mut text = p.layout(&chip_label, theme::SMALL, None);
             text.truncate(p.fonts, 160.0);
@@ -535,7 +598,12 @@ impl Chat {
         }
         let personas_h = if chips.is_empty() { 0.0 } else { at_y + CHIP_H + 18.0 };
         let height = 24.0 + 30.0 + note_h + personas_h + name_block + 22.0 + body_h + error_h + 24.0 + 34.0 + 24.0;
-        let card = Rect::new(area.x + ((area.w - width) * 0.5).round(), area.y + ((area.h - height) * 0.42).max(16.0).round(), width, height);
+        let card = Rect::new(
+            area.x + ((area.w - width) * 0.5).round(),
+            area.y + ((area.h - height) * 0.42).max(16.0).round(),
+            width,
+            height,
+        );
         if editing {
             p.rect(area, hexa(0x000000, 0.35), 0.0);
         }
@@ -561,7 +629,12 @@ impl Chat {
                     let hovered = ui.hovered(chip);
                     let hover = ui.anim(id("persona-more"), f32::from(u8::from(hovered || more_open)));
                     p.bordered(chip, fade(t.hover, hover), CHIP_H * 0.5, 1.0, t.border_strong);
-                    p.text(text, chip.x + 11.0, chip.y + (CHIP_H - text.height()) * 0.5, mix(t.text_muted, t.text, hover));
+                    p.text(
+                        text,
+                        chip.x + 11.0,
+                        chip.y + (CHIP_H - text.height()) * 0.5,
+                        mix(t.text_muted, t.text, hover),
+                    );
                     if hovered {
                         ui.cursor = CursorIcon::Pointer;
                         if ui.clicked(chip) {
@@ -570,13 +643,20 @@ impl Chat {
                     }
                     continue;
                 };
-                let chosen = names::same(&record.name, &name) && record.description == description && record.portrait == photo;
+                let chosen =
+                    names::same(&record.name, &name) && record.description == description && record.portrait == photo;
                 let hovered = ui.hovered(chip);
                 let hover = ui.anim(id(("persona", &record.id)), f32::from(u8::from(hovered)));
                 if chosen {
                     p.rect(chip, fade(t.accent, 0.14 + 0.1 * hover), CHIP_H * 0.5);
                 } else {
-                    p.bordered(chip, mix(t.surface, t.hover, hover), CHIP_H * 0.5, 1.0, mix(t.border, t.border_strong, hover));
+                    p.bordered(
+                        chip,
+                        mix(t.surface, t.hover, hover),
+                        CHIP_H * 0.5,
+                        1.0,
+                        mix(t.border, t.border_strong, hover),
+                    );
                 }
                 let mut text_x = chip.x + 11.0;
                 if let Some(path) = path {
@@ -584,7 +664,12 @@ impl Chat {
                     portrait(p, Some(path), &record.name, face, face.w * 0.5);
                     text_x = face.right() + 7.0;
                 }
-                p.text(text, text_x, chip.y + (CHIP_H - text.height()) * 0.5, if chosen || hovered { t.text } else { t.text_muted });
+                p.text(
+                    text,
+                    text_x,
+                    chip.y + (CHIP_H - text.height()) * 0.5,
+                    if chosen || hovered { t.text } else { t.text_muted },
+                );
                 if hovered {
                     ui.cursor = CursorIcon::Pointer;
                     if ui.clicked(chip) {
@@ -616,7 +701,14 @@ impl Chat {
             Some(state) => {
                 let label = if state == Kept::Changed { "Update persona" } else { "Save as persona" };
                 let button_w = p.layout(label, theme::LABEL, None).width() + 20.0;
-                keep = button(p, ui, Rect::new(x + inner - button_w + 8.0, y - 5.0, button_w, 26.0), label, ButtonStyle::Ghost, true);
+                keep = button(
+                    p,
+                    ui,
+                    Rect::new(x + inner - button_w + 8.0, y - 5.0, button_w, 26.0),
+                    label,
+                    ButtonStyle::Ghost,
+                    true,
+                );
             }
             None => {}
         }
@@ -643,14 +735,16 @@ impl Chat {
             None => matches!(subject, Subject::Scene | Subject::Note) || (!name.is_empty() && !taken),
         };
         let shortcut = if cfg!(target_os = "macos") { "Cmd+Enter" } else { "Ctrl+Enter" };
-        let tip = p.layout(&format!("{shortcut} to {}", submit.trim_end_matches('…').to_lowercase()), theme::TINY, None);
+        let tip =
+            p.layout(&format!("{shortcut} to {}", submit.trim_end_matches('…').to_lowercase()), theme::TINY, None);
         if ready {
             p.text(&tip, x, y + (34.0 - tip.height()) * 0.5, t.text_faint);
         }
         let submit_rect = Rect::new(x + inner - 120.0, y, 120.0, 34.0);
         let mut cancelled = false;
         if editing {
-            cancelled = button(p, ui, Rect::new(submit_rect.x - 98.0, y, 90.0, 34.0), "Cancel", ButtonStyle::Ghost, true);
+            cancelled =
+                button(p, ui, Rect::new(submit_rect.x - 98.0, y, 90.0, 34.0), "Cancel", ButtonStyle::Ghost, true);
         }
         if button(p, ui, submit_rect, submit, ButtonStyle::Primary, ready) {
             self.submit_form(actions);
@@ -686,7 +780,12 @@ impl Chat {
         let chrome = 24.0 + 30.0 + note_h + 12.0 + 30.0 + 24.0 + 34.0 + 24.0;
         let list_h = content_h.min((area.h - 32.0 - chrome).max(120.0));
         let height = chrome + list_h;
-        let card = Rect::new(area.x + ((area.w - width) * 0.5).round(), area.y + ((area.h - height) * 0.42).max(16.0).round(), width, height);
+        let card = Rect::new(
+            area.x + ((area.w - width) * 0.5).round(),
+            area.y + ((area.h - height) * 0.42).max(16.0).round(),
+            width,
+            height,
+        );
         p.rect(area, hexa(0x000000, 0.35), 0.0);
         p.shadow(Rect::new(card.x, card.y + 8.0, card.w, card.h), t.shadow, theme::RADIUS, 24.0);
         p.bordered(card, t.panel, theme::RADIUS, 1.0, t.border_strong);
@@ -722,7 +821,8 @@ impl Chat {
                 continue;
             }
             form.fields.draw(index, p, ui, field, layout, "e.g. Katniss promised Prim she would come home.", in_list);
-            let cross = Rect::new(field.right() + 8.0, field.y + (heights[index].min(40.0) - REMOVE) * 0.5, REMOVE, REMOVE);
+            let cross =
+                Rect::new(field.right() + 8.0, field.y + (heights[index].min(40.0) - REMOVE) * 0.5, REMOVE, REMOVE);
             if button(p, ui, cross, "×", ButtonStyle::Ghost, in_list) {
                 remove = Some(index);
             }
@@ -753,7 +853,15 @@ impl Chat {
 
 /// Draws a cast member's portrait at `rect` (the file at `path`, or the
 /// initial of `name`): clicking it picks another, its × removes it.
-fn draw_photo(p: &mut Painter, ui: &mut Ui, rect: Rect, path: Option<&str>, name: &str, form: &mut CharacterForm, actions: &mut Vec<Action>) {
+fn draw_photo(
+    p: &mut Painter,
+    ui: &mut Ui,
+    rect: Rect,
+    path: Option<&str>,
+    name: &str,
+    form: &mut CharacterForm,
+    actions: &mut Vec<Action>,
+) {
     let t = p.theme;
     let hovered = ui.hovered(rect) && !form.picking;
     portrait(p, path, name, rect, theme::RADIUS_SM);
@@ -827,27 +935,45 @@ mod tests {
         form.fields.editor(DESCRIPTION).insert("A hunter.");
         let mut actions = Vec::new();
         chat.submit_form(&mut actions);
-        assert!(matches!(&actions[..], [Action::SaveSession(s)] if s.player.as_ref().is_some_and(|p| p.description == "A hunter.")));
+        assert!(
+            matches!(&actions[..], [Action::SaveSession(s)] if s.player.as_ref().is_some_and(|p| p.description == "A hunter."))
+        );
     }
 
     #[test]
     fn personas_are_played_and_saved() {
         let mut chat = Chat::new(None, Reasoning::Auto, Vec::new());
-        let gale = openrp_core::Persona { id: "g".into(), name: "Gale".into(), description: "A hunter.".into(), portrait: "g.png".into(), favorite: true, ..Default::default() };
+        let gale = openrp_core::Persona {
+            id: "g".into(),
+            name: "Gale".into(),
+            description: "A hunter.".into(),
+            portrait: "g.png".into(),
+            favorite: true,
+            ..Default::default()
+        };
         chat.library_loaded(Vec::new(), Vec::new(), vec![gale], openrp_core::Portraits::at("p".into()));
 
         // A new story asks who you are with the starred persona filled in.
         chat.play("w".into());
         chat.sync_character_form();
         let form = chat.character_form().unwrap();
-        assert_eq!((form.fields.text(NAME), form.fields.text(DESCRIPTION), form.portrait.as_str()), ("Gale", "A hunter.", "g.png"));
+        assert_eq!(
+            (form.fields.text(NAME), form.fields.text(DESCRIPTION), form.portrait.as_str()),
+            ("Gale", "A hunter.", "g.png")
+        );
         let mut actions = Vec::new();
         chat.submit_form(&mut actions);
         let player = chat.current().player.clone().unwrap();
-        assert_eq!((player.name.as_str(), player.portrait.as_str()), ("Gale", "g.png"), "begun as the persona, portrait and all");
+        assert_eq!(
+            (player.name.as_str(), player.portrait.as_str()),
+            ("Gale", "g.png"),
+            "begun as the persona, portrait and all"
+        );
 
         // Past six, the rest are searched in a menu.
-        let more: Vec<openrp_core::Persona> = (0..8).map(|i| openrp_core::Persona { id: format!("p{i}"), name: format!("P{i}"), ..Default::default() }).collect();
+        let more: Vec<openrp_core::Persona> = (0..8)
+            .map(|i| openrp_core::Persona { id: format!("p{i}"), name: format!("P{i}"), ..Default::default() })
+            .collect();
         chat.library_loaded(Vec::new(), Vec::new(), more, openrp_core::Portraits::at("p".into()));
         chat.edit_player();
         let rue = chat.persona_choices().iter().position(|r| r.name == "P7").unwrap();
@@ -906,9 +1032,15 @@ mod tests {
         chat.submit_form(&mut actions);
         assert!(actions.is_empty(), "one request at a time");
         chat.character_generated(job.conversation, job.request + 1, Ok(None));
-        assert!(matches!(chat.character_form().unwrap().subject, Subject::Generate { request: Some(_), .. }), "a stale answer is dropped");
-        let call =
-            ToolCall { call_id: "c".into(), name: tools::CREATE_CHARACTER.into(), arguments: r#"{"name":"Cato","description":"A career."}"#.into() };
+        assert!(
+            matches!(chat.character_form().unwrap().subject, Subject::Generate { request: Some(_), .. }),
+            "a stale answer is dropped"
+        );
+        let call = ToolCall {
+            call_id: "c".into(),
+            name: tools::CREATE_CHARACTER.into(),
+            arguments: r#"{"name":"Cato","description":"A career."}"#.into(),
+        };
         chat.character_generated(job.conversation, job.request, Ok(Some(call)));
         let form = chat.character_form().unwrap();
         assert!(form.subject == Subject::NewMember && form.fields.text(DESCRIPTION) == "A career.");
@@ -933,13 +1065,21 @@ mod tests {
 
         chat.edit_memories();
         let form = chat.character_form().unwrap();
-        assert_eq!((form.fields.count(), form.fields.text(0), form.fields.text(1)), (2, "One.", "Two."), "a field each");
+        assert_eq!(
+            (form.fields.count(), form.fields.text(0), form.fields.text(1)),
+            (2, "One.", "Two."),
+            "a field each"
+        );
         form.fields.insert(" Changed.");
         form.fields.remove(1);
         form.fields.push(" - Three\n is   new. ");
         form.fields.push("  ");
         chat.submit_form(&mut actions);
-        assert_eq!(chat.current().memories, ["One. Changed.", "Three is new."], "edited, removed, added; blanks dropped");
+        assert_eq!(
+            chat.current().memories,
+            ["One. Changed.", "Three is new."],
+            "edited, removed, added; blanks dropped"
+        );
 
         // Cancelled, nothing changes; with none yet, there is a field to start in.
         chat.current().memories.clear();
@@ -956,7 +1096,9 @@ mod tests {
         assert_eq!(chat.current().note, "Slow burn.");
         let id = chat.current().id;
         assert!(chat.state(id).unwrap().ends_with("Slow burn."), "the note comes last");
-        assert!(matches!(actions.last(), Some(Action::SaveSession(s)) if s.note == "Slow burn." && s.memories.is_empty()));
+        assert!(
+            matches!(actions.last(), Some(Action::SaveSession(s)) if s.note == "Slow burn." && s.memories.is_empty())
+        );
     }
 
     #[test]

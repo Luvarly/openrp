@@ -51,7 +51,11 @@ pub fn read_card(bytes: &[u8]) -> Result<Character> {
 /// The file is not JSON or a PNG card, or holds no lore entries.
 pub fn read_lorebook(bytes: &[u8]) -> Result<Vec<LoreEntry>> {
     let value = card_value(bytes)?;
-    let book = value.get("data").and_then(|d| d.get("character_book")).or_else(|| value.get("character_book")).unwrap_or(&value);
+    let book = value
+        .get("data")
+        .and_then(|d| d.get("character_book"))
+        .or_else(|| value.get("character_book"))
+        .unwrap_or(&value);
     let entries = book_entries(book);
     if entries.is_empty() { Err(invalid("No lore entries were found in this file.")) } else { Ok(entries) }
 }
@@ -108,7 +112,10 @@ pub fn macros<'a>(text: &'a str, character: Option<&str>, user: &str) -> Cow<'a,
     while let Some(at) = rest.find(['{', '<']) {
         out.push_str(&rest[..at]);
         rest = &rest[at..];
-        let found = tokens.iter().find_map(|(token, value)| Some((*token, (*value)?)).filter(|(token, _)| rest.get(..token.len()).is_some_and(|s| s.eq_ignore_ascii_case(token))));
+        let found = tokens.iter().find_map(|(token, value)| {
+            Some((*token, (*value)?))
+                .filter(|(token, _)| rest.get(..token.len()).is_some_and(|s| s.eq_ignore_ascii_case(token)))
+        });
         // `{` and `<` are one byte each.
         let (taken, value) = found.map_or((1, &rest[..1]), |(token, value)| (token.len(), value));
         out.push_str(value);
@@ -140,20 +147,23 @@ fn card_value(bytes: &[u8]) -> Result<Value> {
 fn character(card: &Value) -> Option<Character> {
     // V2 and V3 keep their fields under `data`; V1 and older exports at the top.
     let data = card.get("data").filter(|d| d.is_object()).unwrap_or(card);
-    let text = |keys: &[&str]| keys.iter().find_map(|k| data.get(*k).and_then(Value::as_str)).map(clean).unwrap_or_default();
+    let text =
+        |keys: &[&str]| keys.iter().find_map(|k| data.get(*k).and_then(Value::as_str)).map(clean).unwrap_or_default();
     let name = text(&["name", "char_name"]);
     if name.is_empty() {
         return None;
     }
     let mut description = text(&["description", "char_persona"]);
-    for (label, value) in [("Personality", text(&["personality"])), ("Scenario", text(&["scenario", "world_scenario"]))] {
+    for (label, value) in [("Personality", text(&["personality"])), ("Scenario", text(&["scenario", "world_scenario"]))]
+    {
         if !value.is_empty() && !description.contains(&value) {
             let gap = if description.is_empty() { "" } else { "\n\n" };
             description = format!("{description}{gap}{label}: {value}");
         }
     }
     let first = text(&["first_mes", "char_greeting"]);
-    let greetings = std::iter::once(first).chain(strings(data.get("alternate_greetings"))).filter(|g| !g.is_empty()).collect();
+    let greetings =
+        std::iter::once(first).chain(strings(data.get("alternate_greetings"))).filter(|g| !g.is_empty()).collect();
     let mut tags: Vec<String> = Vec::new();
     for tag in strings(data.get("tags")) {
         if !tags.iter().any(|t| t.eq_ignore_ascii_case(&tag)) {
@@ -228,17 +238,24 @@ fn book_entries(book: &Value) -> Vec<LoreEntry> {
         _ => Vec::new(),
     };
     // World info is keyed by number, which JSON objects do not keep in order.
-    let order = |e: &Value| ["insertion_order", "order", "uid", "id"].iter().find_map(|k| e.get(*k).and_then(Value::as_i64)).unwrap_or(0);
+    let order = |e: &Value| {
+        ["insertion_order", "order", "uid", "id"].iter().find_map(|k| e.get(*k).and_then(Value::as_i64)).unwrap_or(0)
+    };
     entries.sort_by_key(|e| order(e));
     entries
         .into_iter()
         .filter_map(|e| {
-            let off = e.get("disable").and_then(Value::as_bool) == Some(true) || e.get("enabled").and_then(Value::as_bool) == Some(false);
+            let off = e.get("disable").and_then(Value::as_bool) == Some(true)
+                || e.get("enabled").and_then(Value::as_bool) == Some(false);
             let content = e.get("content").and_then(Value::as_str).map(clean).unwrap_or_default();
             let keys = strings(e.get("keys").or_else(|| e.get("key")));
             let constant = e.get("constant").and_then(Value::as_bool) == Some(true);
             // An entry without keys is read only when constant.
-            (!off && !content.is_empty() && (constant || !keys.is_empty())).then_some(LoreEntry { keys, content, constant })
+            (!off && !content.is_empty() && (constant || !keys.is_empty())).then_some(LoreEntry {
+                keys,
+                content,
+                constant,
+            })
         })
         .collect()
 }

@@ -120,7 +120,13 @@ impl ImageAtlas {
         if let Some(shelf) = slot.evicted {
             self.entries.retain(|_, (_, s)| *s != shelf);
         }
-        self.uploads.push(Upload { x: slot.x, y: slot.y, w: key.w + 1, h: key.h + 1, data: pad(&pixels, key.w, key.h, 4) });
+        self.uploads.push(Upload {
+            x: slot.x,
+            y: slot.y,
+            w: key.w + 1,
+            h: key.h + 1,
+            data: pad(&pixels, key.w, key.h, 4),
+        });
         let uv = [slot.x as f32, slot.y as f32, key.w as f32, key.h as f32];
         self.entries.insert(key, (uv, slot.shelf));
     }
@@ -170,8 +176,12 @@ pub fn decode_png(bytes: &[u8]) -> Result<(Vec<u8>, u32, u32), String> {
         let row = &row[..(w as usize * info.color_type.samples()).min(row.len())];
         match info.color_type {
             png::ColorType::Rgba => rgba.extend_from_slice(row),
-            png::ColorType::Rgb => row.as_chunks::<3>().0.iter().for_each(|p| rgba.extend_from_slice(&[p[0], p[1], p[2], 255])),
-            png::ColorType::GrayscaleAlpha => row.as_chunks::<2>().0.iter().for_each(|p| rgba.extend_from_slice(&[p[0], p[0], p[0], p[1]])),
+            png::ColorType::Rgb => {
+                row.as_chunks::<3>().0.iter().for_each(|p| rgba.extend_from_slice(&[p[0], p[1], p[2], 255]));
+            }
+            png::ColorType::GrayscaleAlpha => {
+                row.as_chunks::<2>().0.iter().for_each(|p| rgba.extend_from_slice(&[p[0], p[0], p[0], p[1]]));
+            }
             png::ColorType::Grayscale => row.iter().for_each(|&g| rgba.extend_from_slice(&[g, g, g, 255])),
             png::ColorType::Indexed => return Err("unexpanded palette image".into()),
         }
@@ -189,7 +199,8 @@ fn decode_jpeg(bytes: &[u8]) -> Result<(Vec<u8>, u32, u32, u8), String> {
     use zune_jpeg::zune_core::options::DecoderOptions;
 
     let side = (MAX_PIXELS as f64).sqrt() as usize * 2;
-    let options = DecoderOptions::default().jpeg_set_out_colorspace(ColorSpace::RGBA).set_max_width(side).set_max_height(side);
+    let options =
+        DecoderOptions::default().jpeg_set_out_colorspace(ColorSpace::RGBA).set_max_width(side).set_max_height(side);
     let mut decoder = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), options);
     decoder.decode_headers().map_err(|e| e.to_string())?;
     let info = decoder.info().ok_or("missing image header")?;
@@ -213,9 +224,18 @@ fn exif_orientation(exif: &[u8]) -> u8 {
         Some(b"II*\0") => false,
         _ => return 1,
     };
-    let u16_at = |at: usize| exif.get(at..at + 2).map(|b| if big { u16::from_be_bytes([b[0], b[1]]) } else { u16::from_le_bytes([b[0], b[1]]) });
+    let u16_at = |at: usize| {
+        exif.get(at..at + 2)
+            .map(|b| if big { u16::from_be_bytes([b[0], b[1]]) } else { u16::from_le_bytes([b[0], b[1]]) })
+    };
     let u32_at = |at: usize| {
-        exif.get(at..at + 4).map(|b| if big { u32::from_be_bytes([b[0], b[1], b[2], b[3]]) } else { u32::from_le_bytes([b[0], b[1], b[2], b[3]]) })
+        exif.get(at..at + 4).map(|b| {
+            if big {
+                u32::from_be_bytes([b[0], b[1], b[2], b[3]])
+            } else {
+                u32::from_le_bytes([b[0], b[1], b[2], b[3]])
+            }
+        })
     };
     let Some(ifd) = u32_at(4).map(|o| o as usize) else {
         return 1;

@@ -38,7 +38,14 @@ impl Fields {
     /// take several lines.
     #[must_use]
     pub fn new<const N: usize>(editors: [Editor; N], multiline: [bool; N]) -> Self {
-        Self { editors: editors.into(), multiline: multiline.into(), focus: 0, selecting: None, layouts: vec![None; N], caret: None }
+        Self {
+            editors: editors.into(),
+            multiline: multiline.into(),
+            focus: 0,
+            selecting: None,
+            layouts: vec![None; N],
+            caret: None,
+        }
     }
 
     /// Multi-line fields holding `texts` (at least one), the first focused.
@@ -153,11 +160,18 @@ impl Fields {
                 self.focus = if mods.shift_key() { (focus + n - 1) % n } else { (focus + 1) % n };
                 true
             }
-            Key::Named(NamedKey::Enter) if self.multiline[focus] && self.editors[focus].accepts('\n') && !mods.control_key() && !mods.super_key() => {
+            Key::Named(NamedKey::Enter)
+                if self.multiline[focus]
+                    && self.editors[focus].accepts('\n')
+                    && !mods.control_key()
+                    && !mods.super_key() =>
+            {
                 self.editors[focus].insert("\n");
                 true
             }
-            Key::Named(NamedKey::Enter) if focus + 1 < self.editors.len() && !mods.control_key() && !mods.super_key() => {
+            Key::Named(NamedKey::Enter)
+                if focus + 1 < self.editors.len() && !mods.control_key() && !mods.super_key() =>
+            {
                 self.focus += 1;
                 true
             }
@@ -183,7 +197,16 @@ impl Fields {
     /// lets the mouse focus it, place the caret and select. `interactive`
     /// is false where the pointer is outside the visible area.
     #[allow(clippy::too_many_arguments, reason = "field geometry and content; a struct would only rename them")]
-    pub fn draw(&mut self, index: usize, p: &mut Painter, ui: &mut Ui, rect: Rect, layout: TextLayout, placeholder: &str, interactive: bool) {
+    pub fn draw(
+        &mut self,
+        index: usize,
+        p: &mut Painter,
+        ui: &mut Ui,
+        rect: Rect,
+        layout: TextLayout,
+        placeholder: &str,
+        interactive: bool,
+    ) {
         let t = p.theme;
         let origin = (rect.x + FIELD_PAD.0, rect.y + FIELD_PAD.1);
         let byte_at = |ui: &Ui| layout.hit(ui.mouse.0 - origin.0, ui.mouse.1 - origin.1);

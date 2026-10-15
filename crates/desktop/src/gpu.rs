@@ -125,7 +125,8 @@ impl Renderer {
     /// # Errors
     /// See [`GpuError`].
     pub async fn new(window: Arc<Window>, display: winit::event_loop::OwnedDisplayHandle) -> Result<Self, GpuError> {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_with_display_handle_from_env(Box::new(display)));
+        let instance =
+            wgpu::Instance::new(wgpu::InstanceDescriptor::new_with_display_handle_from_env(Box::new(display)));
         let size = window.inner_size();
         let surface = instance.create_surface(window).map_err(GpuError::Surface)?;
         let adapter = instance
@@ -162,8 +163,13 @@ impl Renderer {
         // Blend in sRGB space (like browsers do) by picking a non-sRGB
         // format; fall back to converting in the shader if there is none.
         let caps = surface.get_capabilities(&adapter);
-        let format =
-            caps.formats.iter().copied().find(|f| !f.is_srgb()).or_else(|| caps.formats.first().copied()).ok_or(GpuError::NoSurfaceFormat)?;
+        let format = caps
+            .formats
+            .iter()
+            .copied()
+            .find(|f| !f.is_srgb())
+            .or_else(|| caps.formats.first().copied())
+            .ok_or(GpuError::NoSurfaceFormat)?;
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
@@ -220,7 +226,11 @@ impl Renderer {
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                    ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
@@ -299,7 +309,20 @@ impl Renderer {
         });
 
         let instances = Self::instance_buffer(&device, 1024);
-        Ok(Self { surface, device, queue, config, pipeline, bind_group, globals, atlas, images, instances, linear_output: format.is_srgb(), lost })
+        Ok(Self {
+            surface,
+            device,
+            queue,
+            config,
+            pipeline,
+            bind_group,
+            globals,
+            atlas,
+            images,
+            instances,
+            linear_output: format.is_srgb(),
+            lost,
+        })
     }
 
     /// The device was lost: drawing does nothing until the renderer is
@@ -329,7 +352,14 @@ impl Renderer {
     }
 
     /// Uploads pending glyphs and thumbnails and draws `instances` over `clear`.
-    pub fn render(&mut self, instances: &[Instance], glyphs: &mut Vec<Upload>, images: &mut Vec<Upload>, scale: f32, clear: [f32; 4]) -> Frame {
+    pub fn render(
+        &mut self,
+        instances: &[Instance],
+        glyphs: &mut Vec<Upload>,
+        images: &mut Vec<Upload>,
+        scale: f32,
+        clear: [f32; 4],
+    ) -> Frame {
         if self.is_lost() {
             return Frame::Skipped;
         }
@@ -343,7 +373,11 @@ impl Renderer {
                         aspect: wgpu::TextureAspect::All,
                     },
                     &upload.data,
-                    wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(upload.w * bytes_per_texel), rows_per_image: None },
+                    wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(upload.w * bytes_per_texel),
+                        rows_per_image: None,
+                    },
                     wgpu::Extent3d { width: upload.w, height: upload.h, depth_or_array_layers: 1 },
                 );
             }
@@ -360,7 +394,9 @@ impl Renderer {
                 self.surface.configure(&self.device, &self.config);
                 return Frame::Retry;
             }
-            wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded | wgpu::CurrentSurfaceTexture::Validation => {
+            wgpu::CurrentSurfaceTexture::Timeout
+            | wgpu::CurrentSurfaceTexture::Occluded
+            | wgpu::CurrentSurfaceTexture::Validation => {
                 return Frame::Skipped;
             }
         };
@@ -426,8 +462,8 @@ mod tests {
 
     #[test]
     fn shader_compiles() {
-        let module =
-            naga::front::wgsl::parse_str(include_str!("shader.wgsl")).unwrap_or_else(|e| panic!("{}", e.emit_to_string(include_str!("shader.wgsl"))));
+        let module = naga::front::wgsl::parse_str(include_str!("shader.wgsl"))
+            .unwrap_or_else(|e| panic!("{}", e.emit_to_string(include_str!("shader.wgsl"))));
         naga::valid::Validator::new(naga::valid::ValidationFlags::all(), naga::valid::Capabilities::empty())
             .validate(&module)
             .unwrap_or_else(|e| panic!("{e:?}"));

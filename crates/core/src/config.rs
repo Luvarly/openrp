@@ -73,8 +73,19 @@ impl std::fmt::Debug for Config {
 /// The keys this build reads; see [`Config`]. `token` and `provider` belonged
 /// to the SereChat sign-in, which is gone: read so they are dropped, never
 /// written.
-const KEYS: [&str; 11] =
-    ["token", "provider", "base_url", "api_key", "model", "reasoning", "theme", "reasoning_view", "utility_model", "window", "zoom"];
+const KEYS: [&str; 11] = [
+    "token",
+    "provider",
+    "base_url",
+    "api_key",
+    "model",
+    "reasoning",
+    "theme",
+    "reasoning_view",
+    "utility_model",
+    "window",
+    "zoom",
+];
 
 impl Config {
     /// Returns `~/.openrp`, the directory holding all local app data.
@@ -82,7 +93,10 @@ impl Config {
     /// # Errors
     /// [`Error::NoHomeDir`] if the platform reports no home directory.
     pub fn dir() -> Result<PathBuf> {
-        std::env::home_dir().filter(|p| !p.as_os_str().is_empty()).map(|home| home.join(DIR_NAME)).ok_or(Error::NoHomeDir)
+        std::env::home_dir()
+            .filter(|p| !p.as_os_str().is_empty())
+            .map(|home| home.join(DIR_NAME))
+            .ok_or(Error::NoHomeDir)
     }
 
     /// Returns the full path of the configuration file.
@@ -147,7 +161,10 @@ impl Config {
                 continue;
             }
             in_table |= line.starts_with('[');
-            let known = line.split_once('=').map(|(key, rest)| (key.trim(), rest)).filter(|(key, _)| !in_table && KEYS.contains(key));
+            let known = line
+                .split_once('=')
+                .map(|(key, rest)| (key.trim(), rest))
+                .filter(|(key, _)| !in_table && KEYS.contains(key));
             let Some((key, rest)) = known else {
                 config.extra.push(raw.to_owned());
                 continue;
@@ -371,7 +388,11 @@ mod tests {
         // A newer build's settings survive an older one: kept and written back.
         let newer = "model = \"t\"\nfont_size = 14\nlist = [1, 2]\n[window]\ntheme = \"not ours\"\n";
         let config = Config::parse(newer).unwrap();
-        assert_eq!((config.model.as_deref(), config.theme.as_deref()), (Some("t"), None), "keys in a table are not ours");
+        assert_eq!(
+            (config.model.as_deref(), config.theme.as_deref()),
+            (Some("t"), None),
+            "keys in a table are not ours"
+        );
         assert_eq!(config.extra, ["font_size = 14", "list = [1, 2]", "[window]", "theme = \"not ours\""]);
         assert_eq!(Config::parse(&config.serialize()).unwrap(), config);
     }

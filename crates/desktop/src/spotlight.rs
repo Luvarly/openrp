@@ -178,7 +178,13 @@ impl Spotlight {
         // any short query.
         let row = |title: &str, also: &str, detail: String, pick: Pick, extra: i32| {
             let in_also = || (!query.is_empty() && also.to_lowercase().contains(&query)).then_some(100);
-            fuzzy(&query, title).or_else(in_also).map(|score| Row { group: "", title: title.to_owned(), detail, pick, score: score + extra })
+            fuzzy(&query, title).or_else(in_also).map(|score| Row {
+                group: "",
+                title: title.to_owned(),
+                detail,
+                pick,
+                score: score + extra,
+            })
         };
         // A library record: by name, then by its comment (which tells
         // look-alikes apart, so it shows beside it), then by description.
@@ -186,7 +192,9 @@ impl Spotlight {
             let detail = if r.comment.is_empty() { kind.to_owned() } else { format!("{kind} · {}", r.comment) };
             let by_comment = (!r.comment.is_empty() && r.comment.to_lowercase().contains(&query)).then_some(600);
             match (row(&r.name, &r.description, detail.clone(), pick.clone(), 0), by_comment) {
-                (Some(found), by_comment) => Some(Row { score: found.score.max(by_comment.unwrap_or(i32::MIN)), ..found }),
+                (Some(found), by_comment) => {
+                    Some(Row { score: found.score.max(by_comment.unwrap_or(i32::MIN)), ..found })
+                }
                 (None, Some(score)) => Some(Row { group: "", title: r.name.clone(), detail, pick, score }),
                 (None, None) => None,
             }
@@ -204,7 +212,17 @@ impl Spotlight {
             let themes = Scheme::ALL.into_iter().filter(|s| *s != cx.scheme);
             group(
                 "Commands",
-                themes.filter_map(|s| row(&format!("Theme: {}", s.label()), "Switch colour scheme", "Switch colour scheme".into(), Pick::Theme(s), -5)).collect(),
+                themes
+                    .filter_map(|s| {
+                        row(
+                            &format!("Theme: {}", s.label()),
+                            "Switch colour scheme",
+                            "Switch colour scheme".into(),
+                            Pick::Theme(s),
+                            -5,
+                        )
+                    })
+                    .collect(),
             );
         }
         let now = openrp_core::unix_now();
@@ -215,8 +233,18 @@ impl Spotlight {
                 .filter_map(|s| {
                     // Recent sessions first when nothing is typed.
                     let recency = -((now.saturating_sub(s.updated) / 3600).min(10_000) as i32);
-                    let detail = if s.world.is_empty() { ago(now, s.updated) } else { format!("{} · {}", s.world, ago(now, s.updated)) };
-                    row(s.title, s.world, detail, Pick::Session(s.id.to_owned()), if query.is_empty() { recency } else { 0 })
+                    let detail = if s.world.is_empty() {
+                        ago(now, s.updated)
+                    } else {
+                        format!("{} · {}", s.world, ago(now, s.updated))
+                    };
+                    row(
+                        s.title,
+                        s.world,
+                        detail,
+                        Pick::Session(s.id.to_owned()),
+                        if query.is_empty() { recency } else { 0 },
+                    )
                 })
                 .collect(),
         );
@@ -229,8 +257,14 @@ impl Spotlight {
                 open.into_iter().chain(play)
             });
             group("Worlds", worlds.collect());
-            group("Characters", cx.characters.iter().filter_map(|c| record(c, "Character", Pick::Character(c.id.clone()))).collect());
-            group("Personas", cx.personas.iter().filter_map(|c| record(c, "Persona", Pick::Persona(c.id.clone()))).collect());
+            group(
+                "Characters",
+                cx.characters.iter().filter_map(|c| record(c, "Character", Pick::Character(c.id.clone()))).collect(),
+            );
+            group(
+                "Personas",
+                cx.personas.iter().filter_map(|c| record(c, "Persona", Pick::Persona(c.id.clone()))).collect(),
+            );
             group(
                 "Models",
                 cx.models
@@ -268,10 +302,16 @@ impl Spotlight {
             Key::Named(NamedKey::Enter) => {
                 return self.picks.get(self.selected).cloned().map_or(Outcome::Close, Outcome::Pick);
             }
-            Key::Named(NamedKey::ArrowDown) => self.selected = (self.selected + 1).min(self.picks.len().saturating_sub(1)),
+            Key::Named(NamedKey::ArrowDown) => {
+                self.selected = (self.selected + 1).min(self.picks.len().saturating_sub(1));
+            }
             Key::Named(NamedKey::ArrowUp) => self.selected = self.selected.saturating_sub(1),
             Key::Named(NamedKey::Tab) => {
-                self.selected = if mods.shift_key() { self.selected.saturating_sub(1) } else { (self.selected + 1) % self.picks.len().max(1) };
+                self.selected = if mods.shift_key() {
+                    self.selected.saturating_sub(1)
+                } else {
+                    (self.selected + 1) % self.picks.len().max(1)
+                };
             }
             _ => {
                 if edit_key(&mut self.input, event, mods, cb) {
@@ -283,7 +323,14 @@ impl Spotlight {
     }
 
     /// Draws the modal over `view`.
-    pub fn draw(&mut self, p: &mut Painter, ui: &mut Ui, view: Rect, cx: &Context<'_>, actions: &mut Vec<Action>) -> Outcome {
+    pub fn draw(
+        &mut self,
+        p: &mut Painter,
+        ui: &mut Ui,
+        view: Rect,
+        cx: &Context<'_>,
+        actions: &mut Vec<Action>,
+    ) -> Outcome {
         let t = p.theme;
         // Debounced content search.
         let query = self.input.text().trim().to_owned();
@@ -313,7 +360,8 @@ impl Spotlight {
         let width = 620.0f32.min(view.w - 48.0);
         let list_h = (rows.len().max(1) as f32 * ROW_H + group_count(&rows) as f32 * 26.0).min(view.h * 0.6);
         let height = 56.0 + list_h + 38.0;
-        let modal = Rect::new(view.x + ((view.w - width) * 0.5).round(), view.y + (view.h * 0.14).round(), width, height);
+        let modal =
+            Rect::new(view.x + ((view.w - width) * 0.5).round(), view.y + (view.h * 0.14).round(), width, height);
         p.shadow(Rect::new(modal.x, modal.y + 12.0, modal.w, modal.h), hexa(0x000000, 0.45), theme::RADIUS * 2.0, 40.0);
         p.bordered(modal, t.surface, theme::RADIUS * 1.5, 1.0, t.border_strong);
 
@@ -347,7 +395,10 @@ impl Spotlight {
         }
         // Keep the keyboard selection in view.
         let selected_y = row_y(&rows, self.selected);
-        self.scroll = self.scroll.clamp((selected_y + ROW_H - list.h).max(0.0), selected_y.max(0.0)).clamp(0.0, (content_h - list.h).max(0.0));
+        self.scroll = self
+            .scroll
+            .clamp((selected_y + ROW_H - list.h).max(0.0), selected_y.max(0.0))
+            .clamp(0.0, (content_h - list.h).max(0.0));
         let clip = p.push_clip(list);
         let mut picked = None;
         if rows.is_empty() {
@@ -378,7 +429,12 @@ impl Spotlight {
             detail.truncate(p.fonts, item.w * 0.4);
             title.truncate(p.fonts, item.w - detail.width() - 44.0);
             p.text(&title, item.x + 14.0, item.y + (ROW_H - title.height()) * 0.5, t.text);
-            p.text(&detail, item.right() - 14.0 - detail.width(), item.y + (ROW_H - detail.height()) * 0.5, t.text_faint);
+            p.text(
+                &detail,
+                item.right() - 14.0 - detail.width(),
+                item.y + (ROW_H - detail.height()) * 0.5,
+                t.text_faint,
+            );
             if hovered {
                 ui.cursor = CursorIcon::Pointer;
                 if ui.clicked(item) {
@@ -465,8 +521,18 @@ mod tests {
 
     /// A world and a character in the library.
     fn library() -> (Vec<Record>, Vec<Record>) {
-        let world = openrp_core::World { id: "w1".into(), name: "Panem".into(), description: "Twelve districts under the Capitol.".into(), ..Default::default() };
-        let hunter = openrp_core::Character { id: "c1".into(), name: "Katniss".into(), description: "A hunter from District 12.".into(), ..Default::default() };
+        let world = openrp_core::World {
+            id: "w1".into(),
+            name: "Panem".into(),
+            description: "Twelve districts under the Capitol.".into(),
+            ..Default::default()
+        };
+        let hunter = openrp_core::Character {
+            id: "c1".into(),
+            name: "Katniss".into(),
+            description: "A hunter from District 12.".into(),
+            ..Default::default()
+        };
         (vec![world.into()], vec![hunter.into()])
     }
 
@@ -533,8 +599,15 @@ mod tests {
         };
         // A world's name finds it, playing it, and the stories played in it.
         let panem = picks("panem");
-        assert!(panem.contains(&("Sessions", Pick::Session("s2".into()))) && !panem.contains(&("Sessions", Pick::Session("s1".into()))));
-        assert_eq!(panem.iter().find(|(g, _)| *g == "Worlds").map(|(_, p)| p), Some(&Pick::World("w1".into())), "opening ranks above playing");
+        assert!(
+            panem.contains(&("Sessions", Pick::Session("s2".into())))
+                && !panem.contains(&("Sessions", Pick::Session("s1".into())))
+        );
+        assert_eq!(
+            panem.iter().find(|(g, _)| *g == "Worlds").map(|(_, p)| p),
+            Some(&Pick::World("w1".into())),
+            "opening ranks above playing"
+        );
         assert!(panem.contains(&("Worlds", Pick::Play("w1".into()))));
         // Characters match by name or description; nothing from the library shows until something is typed.
         assert_eq!(picks("katn"), [("Characters", Pick::Character("c1".into()))]);
@@ -546,19 +619,47 @@ mod tests {
     fn comments_find_library_records() {
         let (world, _) = library();
         let record = |id: &str, name: &str, comment: &str, description: &str| {
-            let c = openrp_core::Character { id: id.into(), name: name.into(), comment: comment.into(), description: description.into(), ..Default::default() };
+            let c = openrp_core::Character {
+                id: id.into(),
+                name: name.into(),
+                comment: comment.into(),
+                description: description.into(),
+                ..Default::default()
+            };
             Record::from(c)
         };
         let characters = [record("a", "Mira", "", "Sharp, quiet."), record("b", "Rex", "the sharp one", "")];
-        let gale = [Record::from(openrp_core::Persona { id: "p".into(), name: "Gale".into(), comment: "my hunter".into(), ..Default::default() })];
-        let cx = Context { sessions: Vec::new(), worlds: &world, characters: &characters, personas: &gale, models: &[], model: "", scheme: Scheme::Dark };
+        let gale = [Record::from(openrp_core::Persona {
+            id: "p".into(),
+            name: "Gale".into(),
+            comment: "my hunter".into(),
+            ..Default::default()
+        })];
+        let cx = Context {
+            sessions: Vec::new(),
+            worlds: &world,
+            characters: &characters,
+            personas: &gale,
+            models: &[],
+            model: "",
+            scheme: Scheme::Dark,
+        };
         let rows = |query: &str| {
             let mut spotlight = Spotlight::default();
             spotlight.input.insert(query);
-            spotlight.rows(&cx).into_iter().filter(|r| r.group != "Commands").map(|r| (r.pick, r.detail)).collect::<Vec<_>>()
+            spotlight
+                .rows(&cx)
+                .into_iter()
+                .filter(|r| r.group != "Commands")
+                .map(|r| (r.pick, r.detail))
+                .collect::<Vec<_>>()
         };
         let sharp = rows("sharp");
-        assert_eq!(sharp[0], (Pick::Character("b".into()), "Character · the sharp one".into()), "a comment ranks above a description");
+        assert_eq!(
+            sharp[0],
+            (Pick::Character("b".into()), "Character · the sharp one".into()),
+            "a comment ranks above a description"
+        );
         assert_eq!(sharp[1].0, Pick::Character("a".into()));
         assert_eq!(rows("hunter"), [(Pick::Persona("p".into()), "Persona · my hunter".into())], "personas too");
     }

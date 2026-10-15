@@ -15,8 +15,8 @@ use std::time::{Duration, Instant};
 
 use arboard::Clipboard;
 use openrp_core::{
-    Character, Client, Config, Error, InputItem, Library, LoreEntry, Model, Persona, Portraits, ResponseRequest, Role, SearchHit, Session,
-    SessionStore, SessionSummary, StreamEvent, ToolCall, ToolChoice, ToolSpec, Usage, World,
+    Character, Client, Config, Error, InputItem, Library, LoreEntry, Model, Persona, Portraits, ResponseRequest, Role,
+    SearchHit, Session, SessionStore, SessionSummary, StreamEvent, ToolCall, ToolChoice, ToolSpec, Usage, World,
 };
 use winit::dpi::{LogicalPosition, LogicalSize};
 use winit::event::{ElementState, Ime, MouseButton, MouseScrollDelta, WindowEvent};
@@ -51,8 +51,13 @@ const ZOOM: (u16, u16) = (50, 200);
 /// How far one press of Ctrl/Cmd + or - zooms, in percent.
 const ZOOM_STEP: u16 = 10;
 /// Waits before trying to load the model list again, one per failure.
-const MODEL_RETRIES: [Duration; 5] =
-    [Duration::from_secs(5), Duration::from_secs(15), Duration::from_secs(30), Duration::from_secs(60), Duration::from_secs(120)];
+const MODEL_RETRIES: [Duration; 5] = [
+    Duration::from_secs(5),
+    Duration::from_secs(15),
+    Duration::from_secs(30),
+    Duration::from_secs(60),
+    Duration::from_secs(120),
+];
 /// Wait between attempts to bring the GPU back after it was lost.
 const GPU_RETRY: Duration = Duration::from_secs(2);
 
@@ -360,7 +365,8 @@ impl App {
         // Wayland's app id and X11's WM_CLASS: desktops match it to the
         // installed `openrp.desktop` for the name and icon.
         #[cfg(target_os = "linux")]
-        let attributes = winit::platform::wayland::WindowAttributesExtWayland::with_name(attributes, "openrp", "openrp");
+        let attributes =
+            winit::platform::wayland::WindowAttributesExtWayland::with_name(attributes, "openrp", "openrp");
         let window = Arc::new(event_loop.create_window(attributes).map_err(StartupError::Window)?);
         set_icon(&window);
         // Chinese, Japanese and Korean input methods deliver text through IME events.
@@ -370,10 +376,19 @@ impl App {
 
         let client = client_for(&config);
         let connected = client.is_some();
-        let sessions_dir =
-            SessionStore::open().inspect_err(|e| log::error(format!("sessions will not be saved: {e}"))).ok().map(|store| store.dir().to_owned());
+        let sessions_dir = SessionStore::open()
+            .inspect_err(|e| log::error(format!("sessions will not be saved: {e}")))
+            .ok()
+            .map(|store| store.dir().to_owned());
         let library = Library::worlds()
-            .and_then(|worlds| Ok(Store { worlds, characters: Library::characters()?, personas: Library::personas()?, portraits: Portraits::open()? }))
+            .and_then(|worlds| {
+                Ok(Store {
+                    worlds,
+                    characters: Library::characters()?,
+                    personas: Library::personas()?,
+                    portraits: Portraits::open()?,
+                })
+            })
             .inspect_err(|e| log::error(format!("worlds, characters and personas will not be saved: {e}")))
             .ok();
         let reporter = proxy.clone();
@@ -434,7 +449,10 @@ impl App {
         chat.set_provider(provider(&self.config));
         if unreadable > 0 {
             let stories = if unreadable == 1 { "1 saved story" } else { "Some saved stories" };
-            chat.notify(format!("{stories} could not be read and are not listed. Their files are left untouched."), true);
+            chat.notify(
+                format!("{stories} could not be read and are not listed. Their files are left untouched."),
+                true,
+            );
         }
         self.screen = Screen::Chat(Box::new(chat));
         self.load_models();
@@ -631,7 +649,8 @@ impl App {
                 self.ui.scroll_x -= dx;
             }
             WindowEvent::KeyboardInput { event, is_synthetic: false, .. } if event.state == ElementState::Pressed => {
-                let primary = if cfg!(target_os = "macos") { self.ui.mods.super_key() } else { self.ui.mods.control_key() };
+                let primary =
+                    if cfg!(target_os = "macos") { self.ui.mods.super_key() } else { self.ui.mods.control_key() };
                 if primary && let Some(zoom) = zoomed(self.zoom, &event.logical_key) {
                     if zoom != self.zoom {
                         self.zoom = zoom;
@@ -676,7 +695,9 @@ impl App {
                 (self.models_retry, self.models_failures) = (None, 0);
                 chat.set_models(models);
             }
-            (WorkerEvent::Models { result: Err(e), .. }, Screen::Chat(_)) if e.is_unauthorized() => self.forget_key(Some(REJECTED.to_owned())),
+            (WorkerEvent::Models { result: Err(e), .. }, Screen::Chat(_)) if e.is_unauthorized() => {
+                self.forget_key(Some(REJECTED.to_owned()));
+            }
             (WorkerEvent::Models { result: Err(e), .. }, Screen::Chat(chat)) => {
                 log::error(format!("could not load models: {e}"));
                 chat.models_failed(format!("Could not load the models: {e}"));
@@ -686,7 +707,9 @@ impl App {
             }
             (WorkerEvent::Problem { text, folder }, Screen::Chat(chat)) => chat.notify(text, folder),
             (WorkerEvent::Problem { text, .. }, Screen::Login(login)) => login.problem = Some(text),
-            (WorkerEvent::SessionLoaded { conversation, result }, Screen::Chat(chat)) => chat.session_loaded(conversation, result.map(|s| *s), &mut actions),
+            (WorkerEvent::SessionLoaded { conversation, result }, Screen::Chat(chat)) => {
+                chat.session_loaded(conversation, result.map(|s| *s), &mut actions);
+            }
             (WorkerEvent::Stream { conversation, stream, event }, Screen::Chat(chat)) => {
                 chat.stream_event(conversation, stream, event);
             }
@@ -702,7 +725,9 @@ impl App {
                 chat.library_loaded(worlds, characters, personas, portraits);
             }
             (WorkerEvent::PortraitPicked(result), Screen::Chat(chat)) => chat.portrait_picked(result),
-            (WorkerEvent::CardsImported { characters, errors }, Screen::Chat(chat)) => chat.cards_imported(characters, errors, &mut actions),
+            (WorkerEvent::CardsImported { characters, errors }, Screen::Chat(chat)) => {
+                chat.cards_imported(characters, errors, &mut actions);
+            }
             (WorkerEvent::LoreImported(result), Screen::Chat(chat)) => chat.lore_imported(result),
             (WorkerEvent::Exported(path), Screen::Chat(chat)) => chat.exported(path),
             (WorkerEvent::CharacterGenerated { conversation, request, result }, Screen::Chat(chat)) => {
@@ -711,7 +736,9 @@ impl App {
             (WorkerEvent::MemoriesReviewed { conversation, request, result }, Screen::Chat(chat)) => {
                 chat.memories_reviewed(conversation, request, result, &mut actions);
             }
-            (WorkerEvent::SearchResults { generation, hits }, Screen::Chat(chat)) => chat.search_results(generation, hits),
+            (WorkerEvent::SearchResults { generation, hits }, Screen::Chat(chat)) => {
+                chat.search_results(generation, hits);
+            }
             // Results for a screen that is no longer shown.
             _ => return,
         }
@@ -732,8 +759,10 @@ impl App {
                 let input = job.input();
                 // Stories offer the story's tools; plain chats none.
                 let definitions = if job.tools { chat::tool_definitions() } else { Vec::new() };
-                let specs: Vec<ToolSpec<'_>> =
-                    definitions.iter().map(|(name, description, parameters)| ToolSpec { name, description, parameters }).collect();
+                let specs: Vec<ToolSpec<'_>> = definitions
+                    .iter()
+                    .map(|(name, description, parameters)| ToolSpec { name, description, parameters })
+                    .collect();
                 let request = ResponseRequest {
                     model: &job.model,
                     instructions: Some(&job.instructions),
@@ -768,7 +797,11 @@ impl App {
                         made = completion.tool_calls.into_iter().next();
                     }
                 });
-                WorkerEvent::CharacterGenerated { conversation: job.conversation, request: job.request, result: result.map(|_| made) }
+                WorkerEvent::CharacterGenerated {
+                    conversation: job.conversation,
+                    request: job.request,
+                    result: result.map(|_| made),
+                }
             }),
             // ponytail: like the generator, not streamed; the chat gives up
             // on one that takes too long, and reads its turns again next time.
@@ -792,7 +825,11 @@ impl App {
                         }
                     }
                 });
-                WorkerEvent::MemoriesReviewed { conversation: job.conversation, request: job.request, result: result.map(|_| (made, used)) }
+                WorkerEvent::MemoriesReviewed {
+                    conversation: job.conversation,
+                    request: job.request,
+                    result: result.map(|_| (made, used)),
+                }
             }),
             Action::SelectModel(model) => {
                 self.config.model = Some(model);
@@ -812,14 +849,20 @@ impl App {
             }
             Action::LoadSession { conversation, session } => {
                 if let Some(store) = self.reader() {
-                    self.spawn(move |_, _| WorkerEvent::SessionLoaded { conversation, result: store.load(&session).map(Box::new) });
+                    self.spawn(move |_, _| WorkerEvent::SessionLoaded {
+                        conversation,
+                        result: store.load(&session).map(Box::new),
+                    });
                 }
             }
             Action::SaveSession(session) => self.writer.send(Job::SaveSession(session)),
             Action::DeleteSession(id) => self.writer.send(Job::DeleteSession(id)),
             Action::Search { query, generation } => {
                 if let Some(store) = self.reader() {
-                    self.spawn(move |_, _| WorkerEvent::SearchResults { generation, hits: store.search(&query, 30).unwrap_or_default() });
+                    self.spawn(move |_, _| WorkerEvent::SearchResults {
+                        generation,
+                        hits: store.search(&query, 30).unwrap_or_default(),
+                    });
                 }
             }
             Action::SaveWorld(world) => {
@@ -866,8 +909,11 @@ impl App {
                 self.spawn(move |_, _| import_cards(&portraits));
             }
             Action::ImportLore => self.spawn(|_, _| {
-                let picked = platform::pick_files("Import a lorebook", ("Lorebooks and cards", &["json", "png"]), false);
-                let read = |path: &std::path::Path| read_file(path).and_then(|bytes| openrp_core::read_lorebook(&bytes).map_err(|e| e.to_string()));
+                let picked =
+                    platform::pick_files("Import a lorebook", ("Lorebooks and cards", &["json", "png"]), false);
+                let read = |path: &std::path::Path| {
+                    read_file(path).and_then(|bytes| openrp_core::read_lorebook(&bytes).map_err(|e| e.to_string()))
+                };
                 WorkerEvent::LoreImported(match picked {
                     Ok(paths) => paths.first().map_or(Ok(Vec::new()), |path| read(path)),
                     Err(e) => Err(format!("Could not open the file picker: {e}")),
@@ -878,15 +924,19 @@ impl App {
             Action::ExportCard { character, portrait } => self.spawn(move |_, _| {
                 let kind = if portrait.is_some() { "png" } else { "json" };
                 let card = || match &portrait {
-                    Some(path) => image::png_bytes(path).and_then(|png| openrp_core::embed_card(&png, &character).map_err(|e| e.to_string())),
+                    Some(path) => image::png_bytes(path)
+                        .and_then(|png| openrp_core::embed_card(&png, &character).map_err(|e| e.to_string())),
                     None => Ok(openrp_core::card_json(&character).into_bytes()),
                 };
                 export("Export character card", &character.name, ("Character card", &[kind]), card)
             }),
             Action::ExportStory { session, world, jsonl } => self.spawn(move |_, _| {
                 let name = if session.title.is_empty() { world.as_str() } else { session.title.as_str() };
-                let (filter, render): (platform::Filter<'_>, fn(&Session, &str) -> String) =
-                    if jsonl { (("SillyTavern chat", &["jsonl"]), chat::export::jsonl) } else { (("Text", &["txt"]), chat::export::text) };
+                let (filter, render): (platform::Filter<'_>, fn(&Session, &str) -> String) = if jsonl {
+                    (("SillyTavern chat", &["jsonl"]), chat::export::jsonl)
+                } else {
+                    (("Text", &["txt"]), chat::export::text)
+                };
                 export("Export story", name, filter, || Ok(render(&session, &world).into_bytes()))
             }),
             Action::OpenFolder(path) => {
@@ -919,7 +969,9 @@ impl App {
                 }
             }
             Action::Copy(text) => copy(&mut self.clipboard, &text),
-            Action::Attention if !self.ui.focused => self.window.request_user_attention(Some(UserAttentionType::Informational)),
+            Action::Attention if !self.ui.focused => {
+                self.window.request_user_attention(Some(UserAttentionType::Informational));
+            }
             Action::Attention => {}
             Action::Connect { base_url, api_key } => {
                 if !self.refuse_switch() {
@@ -989,7 +1041,14 @@ impl App {
         let mut actions = Vec::new();
         // A second pass runs only if the glyph atlas overflowed mid-frame.
         for _ in 0..2 {
-            let mut painter = Painter::new(&self.fonts, (&mut self.atlas, &mut self.images), &mut self.instances, scale, view, &self.palette);
+            let mut painter = Painter::new(
+                &self.fonts,
+                (&mut self.atlas, &mut self.images),
+                &mut self.instances,
+                scale,
+                view,
+                &self.palette,
+            );
             match &mut self.screen {
                 Screen::Login(login) => login.draw(&mut painter, &mut self.ui, view, &mut actions),
                 Screen::Chat(chat) => chat.draw(&mut painter, &mut self.ui, view, self.scheme, &mut actions),
@@ -1003,7 +1062,13 @@ impl App {
             self.ui.end();
         }
 
-        let drawn = self.renderer.render(&self.instances, &mut self.atlas.uploads, &mut self.images.uploads, scale, self.palette.bg);
+        let drawn = self.renderer.render(
+            &self.instances,
+            &mut self.atlas.uploads,
+            &mut self.images.uploads,
+            scale,
+            self.palette.bg,
+        );
         self.ui.end();
         if drawn == Frame::Retry {
             // The surface was set up again: draw this frame onto it.
@@ -1033,7 +1098,8 @@ impl App {
             self.ime_area = area;
             if let Some(r) = area {
                 let z = f32::from(self.zoom) / 100.0;
-                self.window.set_ime_cursor_area(LogicalPosition::new(r.x * z, r.y * z), LogicalSize::new(r.w * z, r.h * z));
+                self.window
+                    .set_ime_cursor_area(LogicalPosition::new(r.x * z, r.y * z), LogicalSize::new(r.w * z, r.h * z));
             }
         }
         let busy = matches!(&self.screen, Screen::Chat(chat) if chat.is_busy());
@@ -1188,8 +1254,12 @@ impl Job {
             (Self::SaveSession(_) | Self::DeleteSession(_), None) => Ok(()),
             (Self::SaveConfig(config), _) => config.save().map_err(|e| ("save the settings", e)),
             (Self::SaveWorld(library, world), _) => library.save(&world.id, &world).map_err(|e| ("save the world", e)),
-            (Self::SaveCharacter(library, character), _) => library.save(&character.id, &character).map_err(|e| ("save the character", e)),
-            (Self::SavePersona(library, persona), _) => library.save(&persona.id, &persona).map_err(|e| ("save the persona", e)),
+            (Self::SaveCharacter(library, character), _) => {
+                library.save(&character.id, &character).map_err(|e| ("save the character", e))
+            }
+            (Self::SavePersona(library, persona), _) => {
+                library.save(&persona.id, &persona).map_err(|e| ("save the persona", e))
+            }
             (Self::DeleteRecord(library, id), _) => library.delete(&id).map_err(|e| ("delete the file", e)),
             (Self::ListSessions(reply), store) => {
                 let listed = match store.map(SessionStore::list) {
@@ -1307,7 +1377,11 @@ const MAX_IMPORT: u64 = 20 << 20;
 /// Reads a file the user picked, refusing huge ones.
 fn read_file(path: &std::path::Path) -> Result<Vec<u8>, String> {
     let too_big = std::fs::metadata(path).map_err(|e| e.to_string())?.len() > MAX_IMPORT;
-    if too_big { Err("the file is larger than 20 MB".to_owned()) } else { std::fs::read(path).map_err(|e| e.to_string()) }
+    if too_big {
+        Err("the file is larger than 20 MB".to_owned())
+    } else {
+        std::fs::read(path).map_err(|e| e.to_string())
+    }
 }
 
 /// Asks for character cards and reads each: a PNG card's image becomes
@@ -1315,7 +1389,12 @@ fn read_file(path: &std::path::Path) -> Result<Vec<u8>, String> {
 fn import_cards(portraits: &Portraits) -> WorkerEvent {
     let paths = match platform::pick_files("Import character cards", ("Character cards", &["png", "json"]), true) {
         Ok(paths) => paths,
-        Err(e) => return WorkerEvent::CardsImported { characters: Vec::new(), errors: vec![format!("Could not open the file picker: {e}")] },
+        Err(e) => {
+            return WorkerEvent::CardsImported {
+                characters: Vec::new(),
+                errors: vec![format!("Could not open the file picker: {e}")],
+            };
+        }
     };
     let (mut characters, mut errors) = (Vec::new(), Vec::new());
     for path in paths {
@@ -1329,7 +1408,8 @@ fn import_cards(portraits: &Portraits) -> WorkerEvent {
         match read {
             Ok(character) => characters.push(character),
             Err(e) => {
-                let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
+                let name =
+                    path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
                 log::error(format!("could not import {name}: {e}"));
                 errors.push(format!("Could not import {name}: {e}"));
             }
@@ -1340,10 +1420,18 @@ fn import_cards(portraits: &Portraits) -> WorkerEvent {
 
 /// Asks where to save a file named after `name`, then writes what `bytes`
 /// makes there. Runs on a worker; a failure is told as a problem.
-fn export(title: &str, name: &str, filter: platform::Filter<'_>, bytes: impl FnOnce() -> Result<Vec<u8>, String>) -> WorkerEvent {
+fn export(
+    title: &str,
+    name: &str,
+    filter: platform::Filter<'_>,
+    bytes: impl FnOnce() -> Result<Vec<u8>, String>,
+) -> WorkerEvent {
     let written = platform::save_file(title, name, filter)
         .map_err(|e| format!("Could not open the file picker: {e}"))
-        .and_then(|path| path.map(|path| bytes().and_then(|b| std::fs::write(&path, b).map_err(|e| e.to_string())).map(|()| path)).transpose());
+        .and_then(|path| {
+            path.map(|path| bytes().and_then(|b| std::fs::write(&path, b).map_err(|e| e.to_string())).map(|()| path))
+                .transpose()
+        });
     match written {
         Ok(path) => WorkerEvent::Exported(path),
         Err(e) => {

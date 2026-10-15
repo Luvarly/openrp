@@ -34,8 +34,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use openrp_core::{
-    CastMember, Completion, Error, InputItem, LoreEntry, Player, Role, StoredMessage, StoryChange, StreamEvent, ToolCall, ToolChoice, ToolResult, Usage,
-    macros, new_id, unix_now,
+    CastMember, Completion, Error, InputItem, LoreEntry, Player, Role, StoredMessage, StoryChange, StreamEvent,
+    ToolCall, ToolChoice, ToolResult, Usage, macros, new_id, unix_now,
 };
 
 use super::tools;
@@ -62,8 +62,13 @@ const KEEP_TURNS: usize = 3;
 const NO_TOOL_CALL: &str = "no_tool_call";
 
 /// Wait before each retry of a failed request; one retry per entry.
-const RETRY_DELAYS: [Duration; 5] =
-    [Duration::from_secs(2), Duration::from_secs(5), Duration::from_secs(15), Duration::from_secs(30), Duration::from_secs(60)];
+const RETRY_DELAYS: [Duration; 5] = [
+    Duration::from_secs(2),
+    Duration::from_secs(5),
+    Duration::from_secs(15),
+    Duration::from_secs(30),
+    Duration::from_secs(60),
+];
 /// Retries a request gets before its error is shown.
 pub(super) const MAX_RETRIES: usize = RETRY_DELAYS.len();
 /// A stream this quiet is dead: the server pings every 15 seconds.
@@ -76,7 +81,8 @@ const DEFAULT_WINDOW: u64 = 128_000;
 const MAX_CONTEXT: u64 = 250_000;
 
 /// System instructions of a chat outside any world (from before worlds).
-const PLAIN_CHAT: &str = "You are OpenRP, a helpful AI assistant in a desktop app. Answer in Markdown and keep answers focused.";
+const PLAIN_CHAT: &str =
+    "You are OpenRP, a helpful AI assistant in a desktop app. Answer in Markdown and keep answers focused.";
 /// How the model runs a story; the world and cast follow it.
 const ROLEPLAY: &str = "You play every character in an interactive roleplay story except the user's own. There is no narrator: \
     the story is told only through the characters, by what they say and do. Stay true to the world's premise, rules and tone, and \
@@ -147,7 +153,11 @@ const NOBODY_HERE: &str = "No one is in the scene yet. Introduce who the user me
 
 /// `(Formerly called …)` for someone with former `aliases`; empty without.
 fn formerly(aliases: &[String]) -> String {
-    if aliases.is_empty() { String::new() } else { format!("(Formerly called {}; they are the same person.)\n\n", aliases.join(", ")) }
+    if aliases.is_empty() {
+        String::new()
+    } else {
+        format!("(Formerly called {}; they are the same person.)\n\n", aliases.join(", "))
+    }
 }
 
 /// A world as a story's prompt reads it: name, description and lore.
@@ -164,7 +174,13 @@ pub(super) fn story_prompt(world: Option<WorldText<'_>>, player: Option<&Player>
     let user = player.map_or("the user", |p| p.name.as_str());
     let mut prompt = format!("{ROLEPLAY}\n\n# World: {name}\n\n{}", macros(description, None, user));
     if let Some(player) = player {
-        let _ = write!(prompt, "\n\n# The user's character: {}\n\n{}{}", player.name, formerly(&player.aliases), macros(&player.description, None, user));
+        let _ = write!(
+            prompt,
+            "\n\n# The user's character: {}\n\n{}{}",
+            player.name,
+            formerly(&player.aliases),
+            macros(&player.description, None, user)
+        );
     }
     if !cast.is_empty() {
         let _ = write!(prompt, "\n\n# Cast\n\n{CAST}");
@@ -172,15 +188,29 @@ pub(super) fn story_prompt(world: Option<WorldText<'_>>, player: Option<&Player>
             // Someone who joined by speaking has no description yet.
             let description = if member.description.trim().is_empty() { UNDESCRIBED } else { &member.description };
             let name = Some(member.name.as_str());
-            let _ = write!(prompt, "\n\n## {}\n\n{}{}", member.name, formerly(&member.aliases), macros(description, name, user));
+            let _ = write!(
+                prompt,
+                "\n\n## {}\n\n{}{}",
+                member.name,
+                formerly(&member.aliases),
+                macros(description, name, user)
+            );
             let examples = examples(&member.examples);
             if !examples.is_empty() {
-                let _ = write!(prompt, "\n\n### How {} talks\n\n{EXAMPLES}\n\n{}", member.name, macros(&examples, name, user));
+                let _ = write!(
+                    prompt,
+                    "\n\n### How {} talks\n\n{EXAMPLES}\n\n{}",
+                    member.name,
+                    macros(&examples, name, user)
+                );
             }
         }
     }
     // Lore that holds whatever is said: the world's, then each member's.
-    let always: Vec<String> = lore_of(lore, cast).filter(|(_, e)| e.constant).map(|(who, e)| macros(&e.content, who, user).into_owned()).collect();
+    let always: Vec<String> = lore_of(lore, cast)
+        .filter(|(_, e)| e.constant)
+        .map(|(who, e)| macros(&e.content, who, user).into_owned())
+        .collect();
     if !always.is_empty() {
         let _ = write!(prompt, "\n\n# Lore\n\n{LORE_ALWAYS}\n\n{}", always.join("\n\n"));
     }
@@ -190,14 +220,20 @@ pub(super) fn story_prompt(world: Option<WorldText<'_>>, player: Option<&Player>
 /// Example dialogue as the model reads it: card separators (`<START>`) and
 /// blank runs dropped.
 fn examples(text: &str) -> String {
-    let lines: Vec<&str> = text.lines().map(str::trim_end).filter(|l| !l.trim().eq_ignore_ascii_case("<start>")).collect();
+    let lines: Vec<&str> =
+        text.lines().map(str::trim_end).filter(|l| !l.trim().eq_ignore_ascii_case("<start>")).collect();
     lines.join("\n").split("\n\n\n").collect::<Vec<_>>().join("\n\n").trim().to_owned()
 }
 
 /// Every lore entry of a story, the world's (`lore`) and then each cast
 /// member's, with the name `{{char}}` means in it.
-fn lore_of<'a>(lore: &'a [LoreEntry], cast: &'a [CastMember]) -> impl Iterator<Item = (Option<&'a str>, &'a LoreEntry)> {
-    lore.iter().map(|e| (None, e)).chain(cast.iter().flat_map(|m| m.lore.iter().map(move |e| (Some(m.name.as_str()), e))))
+fn lore_of<'a>(
+    lore: &'a [LoreEntry],
+    cast: &'a [CastMember],
+) -> impl Iterator<Item = (Option<&'a str>, &'a LoreEntry)> {
+    lore.iter()
+        .map(|e| (None, e))
+        .chain(cast.iter().flat_map(|m| m.lore.iter().map(move |e| (Some(m.name.as_str()), e))))
 }
 
 /// The lore a story's latest turns call for: entries (not constant ones,
@@ -220,7 +256,8 @@ pub(super) fn lore_in_play(lore: &[LoreEntry], cast: &[CastMember], text: &str, 
 
 /// Where the turns searched for lore start: [`LORE_TURNS`] prompts back.
 pub(super) fn lore_start(entries: &[Entry]) -> usize {
-    let prompts: Vec<usize> = entries.iter().enumerate().filter(|(_, e)| e.message.is_prompt()).map(|(i, _)| i).collect();
+    let prompts: Vec<usize> =
+        entries.iter().enumerate().filter(|(_, e)| e.message.is_prompt()).map(|(i, _)| i).collect();
     prompts.len().checked_sub(LORE_TURNS).map_or(0, |at| prompts[at])
 }
 
@@ -228,10 +265,20 @@ pub(super) fn lore_start(entries: &[Entry]) -> usize {
 /// `scene`, who of the `cast` is in it and who is elsewhere, the `lore` the
 /// latest turns call for, the `memories` and the author's `note`, which
 /// weighs most there, at the end.
-pub(super) fn story_state(cast: &[CastMember], lore: &[String], memories: &[String], scene: &str, note: &str) -> String {
+pub(super) fn story_state(
+    cast: &[CastMember],
+    lore: &[String],
+    memories: &[String],
+    scene: &str,
+    note: &str,
+) -> String {
     let mut state = STATE.to_owned();
     let scene = scene.trim();
-    let _ = write!(state, "\n\n# The scene\n\n{}", if scene.is_empty() { "Not set yet: set it in your speak call." } else { scene });
+    let _ = write!(
+        state,
+        "\n\n# The scene\n\n{}",
+        if scene.is_empty() { "Not set yet: set it in your speak call." } else { scene }
+    );
     let present: Vec<&str> = cast.iter().filter(|m| m.present).map(|m| m.name.as_str()).collect();
     if present.is_empty() {
         let _ = write!(state, "\n\n# In the scene\n\n{NOBODY_HERE}");
@@ -297,7 +344,8 @@ const COMPACT_STORY: &str = "The story is about to outgrow the context window, s
     threads; and where the scene is. Leave out what the memories already hold. Reply with the summary only, as plain text: call \
     no tools.";
 /// Introduces a summary when it is sent in place of the history.
-const SUMMARY_INTRO: &str = "Earlier messages were replaced by this summary to fit the context window. Continue from where it leaves off.";
+const SUMMARY_INTRO: &str =
+    "Earlier messages were replaced by this summary to fit the context window. Continue from where it leaves off.";
 
 /// A request being streamed.
 pub(super) struct ActiveStream {
@@ -416,7 +464,9 @@ pub fn input_items(history: &[StoredMessage]) -> Vec<InputItem> {
         items.push(InputItem::text(Role::User, format!("{SUMMARY_INTRO}\n\n{}", summary.content)));
     }
     // A story opened by a character's greeting starts with the user too.
-    if summary.is_none() && kept.iter().chain(after).find(|m| !m.failed && !m.compaction).is_some_and(|m| m.role != Role::User) {
+    if summary.is_none()
+        && kept.iter().chain(after).find(|m| !m.failed && !m.compaction).is_some_and(|m| m.role != Role::User)
+    {
         items.push(InputItem::text(Role::User, STORY_BEGINS));
     }
     for message in kept.iter().chain(after).filter(|m| !m.failed) {
@@ -513,7 +563,8 @@ impl Entry {
     fn keep_streamed_speech(&mut self) {
         for call in std::mem::take(&mut self.streaming_calls) {
             let Some(arguments) = tools::parse_partial(&call.arguments) else { continue };
-            let call = ToolCall { call_id: format!("call_{}", new_id()), name: call.name, arguments: arguments.to_string() };
+            let call =
+                ToolCall { call_id: format!("call_{}", new_id()), name: call.name, arguments: arguments.to_string() };
             let output = "Not run: the reply stopped before this call was complete.".to_owned();
             self.message.tool_calls.push(ToolResult { call, output });
         }
@@ -527,7 +578,12 @@ impl Conversation {
     pub(super) fn resumable(&self) -> bool {
         self.load == Load::Loaded
             && !self.busy()
-            && self.entries.iter().rev().find(|e| !e.message.failed).is_some_and(|e| e.message.role == Role::User || e.message.compaction)
+            && self
+                .entries
+                .iter()
+                .rev()
+                .find(|e| !e.message.failed)
+                .is_some_and(|e| e.message.role == Role::User || e.message.compaction)
     }
 }
 
@@ -568,17 +624,35 @@ impl Chat {
         if prompts == 0 || (!force && prompts < REVIEW_EVERY) {
             return;
         }
-        let world = conversation.world.as_deref().and_then(|w| self.library.get(Kind::World, w)).map(|w| (w.name.as_str(), w.description.as_str()));
+        let world = conversation
+            .world
+            .as_deref()
+            .and_then(|w| self.library.get(Kind::World, w))
+            .map(|w| (w.name.as_str(), w.description.as_str()));
         let cast: Vec<&str> = conversation.cast.iter().map(|m| m.name.as_str()).collect();
         let player = conversation.player.as_ref().map_or("The user", |p| p.name.as_str());
         let transcript = tools::transcript(&unread, player, REVIEW_CHARS);
-        let instructions = tools::reviewer_prompt(world, conversation.player.as_ref().map(|p| p.name.as_str()), &cast, &conversation.memories);
+        let instructions = tools::reviewer_prompt(
+            world,
+            conversation.player.as_ref().map(|p| p.name.as_str()),
+            &cast,
+            &conversation.memories,
+        );
         let cancel = Arc::new(AtomicBool::new(false));
-        let job = ReviewJob { conversation: id, request, model: model.clone(), reasoning, instructions, transcript, cancel: Arc::clone(&cancel) };
+        let job = ReviewJob {
+            conversation: id,
+            request,
+            model: model.clone(),
+            reasoning,
+            instructions,
+            transcript,
+            cancel: Arc::clone(&cancel),
+        };
         if let Some(conversation) = self.find(id) {
             let before = conversation.reviewed;
             conversation.reviewed = before + prompts;
-            conversation.reviewing = Some(Review { request, model, cancel, deadline: Instant::now() + REVIEW_TIMEOUT, before });
+            conversation.reviewing =
+                Some(Review { request, model, cancel, deadline: Instant::now() + REVIEW_TIMEOUT, before });
             actions.push(Action::ReviewMemories(job));
         }
     }
@@ -587,8 +661,15 @@ impl Chat {
     /// memories (once each), and the request is billed with its next reply.
     /// A failed one leaves its turns for the next review. An answer for a
     /// story deleted, or given up on since, is dropped.
-    pub fn memories_reviewed(&mut self, conversation: u64, request: u64, result: Result<(Option<ToolCall>, Usage), Error>, actions: &mut Vec<Action>) {
-        let waiting = |c: &Conversation| c.id == conversation && c.reviewing.as_ref().is_some_and(|r| r.request == request);
+    pub fn memories_reviewed(
+        &mut self,
+        conversation: u64,
+        request: u64,
+        result: Result<(Option<ToolCall>, Usage), Error>,
+        actions: &mut Vec<Action>,
+    ) {
+        let waiting =
+            |c: &Conversation| c.id == conversation && c.reviewing.as_ref().is_some_and(|r| r.request == request);
         let Some(index) = self.conversations.iter().position(waiting) else {
             return;
         };
@@ -616,7 +697,8 @@ impl Chat {
         let (entry_id, stream_id) = (self.next_id(), self.next_id());
         // A summary is side work, for the background model if it can hold
         // as much as the story's.
-        let (model, reasoning) = if compaction { self.summary_model() } else { (self.model.clone(), self.reasoning_key()) };
+        let (model, reasoning) =
+            if compaction { self.summary_model() } else { (self.model.clone(), self.reasoning_key()) };
         let instructions = self.instructions(id);
         let state = self.state(id);
         let budget = keep_budget(compact_limit(self.context_window()));
@@ -742,16 +824,19 @@ impl Chat {
                 }
                 // A reply of only tool calls thought until its first one;
                 // one that never answered, until it completed.
-                message.reasoning_ms = match (message.reasoning.is_empty(), message.content.is_empty() && message.reasoning_ms == 0) {
-                    (true, _) => 0,
-                    (false, true) => elapsed,
-                    (false, false) => message.reasoning_ms,
-                };
+                message.reasoning_ms =
+                    match (message.reasoning.is_empty(), message.content.is_empty() && message.reasoning_ms == 0) {
+                        (true, _) => 0,
+                        (false, true) => elapsed,
+                        (false, false) => message.reasoning_ms,
+                    };
                 // The finished calls replace their previews; they run when the stream ends.
-                message.tool_calls = tool_calls.into_iter().map(|call| ToolResult { call, output: String::new() }).collect();
+                message.tool_calls =
+                    tool_calls.into_iter().map(|call| ToolResult { call, output: String::new() }).collect();
                 entry.streaming_calls.clear();
                 // Failed attempts before this reply are billed with it.
-                message.cost = self.models.iter().find(|m| m.id == stream.model).map_or(0.0, |m| m.cost(usage)) + std::mem::take(carried_cost);
+                message.cost = self.models.iter().find(|m| m.id == stream.model).map_or(0.0, |m| m.cost(usage))
+                    + std::mem::take(carried_cost);
                 message.model = Some(stream.model.clone());
                 message.usage = usage;
                 stream.incomplete = incomplete;
@@ -761,7 +846,13 @@ impl Chat {
 
     /// Finishes a stream: saves the reply, retries, or shows why it failed.
     /// Returns `true` if the server rejected our token.
-    pub fn stream_end(&mut self, conversation: u64, stream: u64, result: Result<bool, Error>, actions: &mut Vec<Action>) -> bool {
+    pub fn stream_end(
+        &mut self,
+        conversation: u64,
+        stream: u64,
+        result: Result<bool, Error>,
+        actions: &mut Vec<Action>,
+    ) -> bool {
         if self.is_impersonation(conversation, stream) {
             return self.impersonation_ended(&result);
         }
@@ -781,7 +872,9 @@ impl Chat {
         };
         let message = &target.entries[index].message;
         // `server_error` and a missing code are retried; `incomplete` is not.
-        let failure = |code: &str, message: &str| Err(Error::Response { code: Some(code.to_owned()), message: message.to_owned() });
+        let failure = |code: &str, message: &str| {
+            Err(Error::Response { code: Some(code.to_owned()), message: message.to_owned() })
+        };
         let result = match (result, active.incomplete.as_deref()) {
             (Ok(true), incomplete) if message.content.is_empty() && message.tool_calls.is_empty() => match incomplete {
                 // It wrote, but not through the characters: tried once more.
@@ -791,15 +884,21 @@ impl Chat {
                      don't follow the story's tools reliably: try again, or pick another model.",
                 ),
                 None => failure("server_error", "The model returned an empty response."),
-                Some("max_output_tokens") => failure("incomplete", "The reply reached the model's output limit before it said anything."),
+                Some("max_output_tokens") => {
+                    failure("incomplete", "The reply reached the model's output limit before it said anything.")
+                }
                 Some(reason) => failure("incomplete", &format!("The provider stopped the reply early ({reason}).")),
             },
-            (Ok(false), _) => Err(Error::Response { code: None, message: "The connection closed before the reply finished.".into() }),
+            (Ok(false), _) => {
+                Err(Error::Response { code: None, message: "The connection closed before the reply finished.".into() })
+            }
             (other, _) => other,
         };
         match result {
             Err(error) => self.request_failed(id, &active, index, &error, actions),
-            Ok(_) if target.entries[index].message.compaction => self.compacted(id, index, active.incomplete.is_some(), actions),
+            Ok(_) if target.entries[index].message.compaction => {
+                self.compacted(id, index, active.incomplete.is_some(), actions);
+            }
             Ok(_) => {
                 let player = target.player.clone();
                 let Conversation { entries, cast, scene, memories, auto_rounds, repairing, .. } = target;
@@ -822,12 +921,14 @@ impl Chat {
                     let (cast_before, scene_before, known) = (cast.clone(), scene.clone(), memories.len());
                     // New characters first, so they can speak in the reply that made them.
                     for creating in [true, false] {
-                        for result in calls.iter_mut().filter(|r| (r.call.name == tools::CREATE_CHARACTER) == creating) {
+                        for result in calls.iter_mut().filter(|r| (r.call.name == tools::CREATE_CHARACTER) == creating)
+                        {
                             result.output = tools::run(&result.call, cast, scene, memories, player.as_ref());
                         }
                     }
                     // Kept so deleting or regenerating the reply can undo it.
-                    entries[index].message.change = StoryChange::between(&cast_before, &scene_before, cast, scene, &memories[known..]);
+                    entries[index].message.change =
+                        StoryChange::between(&cast_before, &scene_before, cast, scene, &memories[known..]);
                 }
                 let complete = active.incomplete.is_none() && *auto_rounds < AUTO_ROUNDS;
                 // Everyone who acted this turn (since the user's message) must
@@ -840,7 +941,8 @@ impl Chat {
                 // showed nothing yet: the model carries on. A repair showed
                 // its turn already.
                 let message = &entries[index].message;
-                let silent = message.content.trim().is_empty() && !message.tool_calls.iter().any(|r| tools::shows_speech(&r.call));
+                let silent = message.content.trim().is_empty()
+                    && !message.tool_calls.iter().any(|r| tools::shows_speech(&r.call));
                 let carry_on = complete && !repair && !was_repair && !message.tool_calls.is_empty() && silent;
                 if repair || carry_on {
                     *auto_rounds += 1;
@@ -860,7 +962,14 @@ impl Chat {
 
     /// A request failed with `error`: compact and resend, retry later, or
     /// give up and show the error.
-    fn request_failed(&mut self, id: u64, active: &ActiveStream, index: usize, error: &Error, actions: &mut Vec<Action>) {
+    fn request_failed(
+        &mut self,
+        id: u64,
+        active: &ActiveStream,
+        index: usize,
+        error: &Error,
+        actions: &mut Vec<Action>,
+    ) {
         let note_id = self.next_id();
         let billed = self.models.iter().find(|m| m.id == active.model).map_or(0.0, |m| m.cost(active.charged));
         let Some(conversation) = self.find(id) else {
@@ -882,7 +991,12 @@ impl Chat {
             conversation.entries.remove(index);
             // As long as the server asks, if it says.
             let wait = error.retry_after().unwrap_or(RETRY_DELAYS[active.attempt]);
-            conversation.retry = Some(Retry { at: Instant::now() + wait, attempt: active.attempt + 1, compaction, error: error.to_string() });
+            conversation.retry = Some(Retry {
+                at: Instant::now() + wait,
+                attempt: active.attempt + 1,
+                compaction,
+                error: error.to_string(),
+            });
             return;
         }
         let text = if error.is_context_overflow() {
@@ -918,7 +1032,8 @@ impl Chat {
         };
         if cut_off {
             let entry = &mut conversation.entries[index];
-            "Summarising the conversation failed: the summary reached the output limit.".clone_into(&mut entry.message.content);
+            "Summarising the conversation failed: the summary reached the output limit."
+                .clone_into(&mut entry.message.content);
             entry.message.failed = true;
             entry.doc = None;
             actions.push(Action::SaveSession(conversation.to_session()));
@@ -948,7 +1063,9 @@ impl Chat {
             if let Some(entry) = conversation.entries.iter_mut().find(|e| e.id == stream.entry) {
                 entry.keep_streamed_speech();
             }
-            conversation.entries.retain(|e| e.id != stream.entry || !e.message.content.is_empty() || !e.message.tool_calls.is_empty());
+            conversation
+                .entries
+                .retain(|e| e.id != stream.entry || !e.message.content.is_empty() || !e.message.tool_calls.is_empty());
             stopped = true;
         }
         if stopped {
@@ -974,7 +1091,9 @@ impl Chat {
             if let Some(retry) = c.retry.as_ref().filter(|r| r.at <= now) {
                 due.push((c.id, retry.compaction, retry.attempt));
             }
-            if let Some(stream) = c.stream.as_ref().filter(|s| now.saturating_duration_since(s.last_event) > IDLE_TIMEOUT) {
+            if let Some(stream) =
+                c.stream.as_ref().filter(|s| now.saturating_duration_since(s.last_event) > IDLE_TIMEOUT)
+            {
                 stream.cancel.store(true, Ordering::Relaxed);
                 silent.push((c.id, stream.id));
             }
@@ -991,7 +1110,9 @@ impl Chat {
     /// When [`Chat::tick`] next has something to do.
     #[must_use]
     pub fn next_deadline(&self) -> Option<Instant> {
-        let deadline = |c: &Conversation| c.retry.as_ref().map(|r| r.at).or_else(|| c.stream.as_ref().map(|s| s.last_event + IDLE_TIMEOUT));
+        let deadline = |c: &Conversation| {
+            c.retry.as_ref().map(|r| r.at).or_else(|| c.stream.as_ref().map(|s| s.last_event + IDLE_TIMEOUT))
+        };
         let reviews = self.conversations.iter().filter_map(|c| c.reviewing.as_ref().map(|r| r.deadline));
         let notices = self.notices.iter().map(|n| n.until);
         self.conversations.iter().filter_map(deadline).chain(reviews).chain(notices).min()
@@ -1027,20 +1148,35 @@ mod tests {
         assert_eq!(story_prompt(None, None, &[]), PLAIN_CHAT);
         let alone = story_prompt(Some(("Panem", "Twelve districts.", &[])), None, &[]);
         assert!(alone.starts_with(ROLEPLAY) && alone.ends_with("# World: Panem\n\nTwelve districts."));
-        let gale = Player { name: "Gale".into(), aliases: vec!["Hunter".into()], description: "A hunter.".into(), ..Player::default() };
+        let gale = Player {
+            name: "Gale".into(),
+            aliases: vec!["Hunter".into()],
+            description: "A hunter.".into(),
+            ..Player::default()
+        };
         let cast = [member("Katniss", "A hunter.", true), member("Rue", " ", true), member("Peeta", "A baker.", false)];
         let full = story_prompt(Some(("Panem", "", &[])), Some(&gale), &cast);
-        assert!(full.contains("# The user's character: Gale\n\n(Formerly called Hunter; they are the same person.)\n\nA hunter."));
-        assert!(full.contains(&format!("# Cast\n\n{CAST}\n\n## Katniss\n\nA hunter.\n\n## Rue\n\n{UNDESCRIBED}\n\n## Peeta\n\nA baker.")));
+        assert!(full.contains(
+            "# The user's character: Gale\n\n(Formerly called Hunter; they are the same person.)\n\nA hunter."
+        ));
+        assert!(full.contains(&format!(
+            "# Cast\n\n{CAST}\n\n## Katniss\n\nA hunter.\n\n## Rue\n\n{UNDESCRIBED}\n\n## Peeta\n\nA baker."
+        )));
         // Who is here, the scene and memories change every turn: never in the prompt.
-        let moved = [member("Katniss", "A hunter.", false), member("Rue", " ", true), member("Peeta", "A baker.", true)];
+        let moved =
+            [member("Katniss", "A hunter.", false), member("Rue", " ", true), member("Peeta", "A baker.", true)];
         assert_eq!(story_prompt(Some(("Panem", "", &[])), Some(&gale), &moved), full, "the prompt stays cacheable");
     }
 
     #[test]
     fn cards_examples_and_lore_reach_the_model() {
-        let entry = |keys: &[&str], content: &str, constant| LoreEntry { keys: keys.iter().map(|k| (*k).to_owned()).collect(), content: content.into(), constant };
-        let world_lore = [entry(&[], "Magic is rare.", true), entry(&["Lantern"], "The Lantern is {{user}}'s inn.", false)];
+        let entry = |keys: &[&str], content: &str, constant| LoreEntry {
+            keys: keys.iter().map(|k| (*k).to_owned()).collect(),
+            content: content.into(),
+            constant,
+        };
+        let world_lore =
+            [entry(&[], "Magic is rare.", true), entry(&["Lantern"], "The Lantern is {{user}}'s inn.", false)];
         let mira = CastMember {
             name: "Mira".into(),
             description: "{{char}} runs a bar; she likes {{user}}.".into(),
@@ -1053,9 +1189,13 @@ mod tests {
         let prompt = story_prompt(Some(("Ard", "", &world_lore)), Some(&gale), std::slice::from_ref(&mira));
         assert!(prompt.contains("## Mira\n\nMira runs a bar; she likes Gale."), "{prompt}");
         assert!(prompt.contains(&format!("### How Mira talks\n\n{EXAMPLES}\n\nGale: Hi.\nMira: *nods*\nMira: Again?")));
-        assert!(prompt.ends_with(&format!("# Lore\n\n{LORE_ALWAYS}\n\nMagic is rare.")), "only constant lore in the prompt");
+        assert!(
+            prompt.ends_with(&format!("# Lore\n\n{LORE_ALWAYS}\n\nMagic is rare.")),
+            "only constant lore in the prompt"
+        );
 
-        let found = lore_in_play(&world_lore, std::slice::from_ref(&mira), "Gale: Two ALES at the lantern, please.", "Gale");
+        let found =
+            lore_in_play(&world_lore, std::slice::from_ref(&mira), "Gale: Two ALES at the lantern, please.", "Gale");
         assert_eq!(found, ["The Lantern is Gale's inn.", "Mira brews her own ale."]);
         assert!(lore_in_play(&world_lore, &[], "Nothing here.", "Gale").is_empty());
         let state = story_state(&[], &found, &[], "", "");
@@ -1072,10 +1212,20 @@ mod tests {
     fn the_story_state_rides_on_the_latest_message() {
         let member = |name: &str, present: bool| CastMember { name: name.into(), present, ..CastMember::default() };
         let nobody = story_state(&[member("Peeta", false)], &[], &[], "", "");
-        assert!(nobody.starts_with(STATE) && nobody.contains(NOBODY_HERE) && nobody.ends_with(&format!("{ELSEWHERE} Peeta")));
+        assert!(
+            nobody.starts_with(STATE)
+                && nobody.contains(NOBODY_HERE)
+                && nobody.ends_with(&format!("{ELSEWHERE} Peeta"))
+        );
         assert!(nobody.contains("Not set yet"), "the model is asked to set the scene");
         let memories = ["Peeta saved Katniss.".to_owned(), "Rue is hurt.".to_owned()];
-        let full = story_state(&[member("Katniss", true), member("Rue", true)], &[], &memories, " The woods. ", " Keep it short. ");
+        let full = story_state(
+            &[member("Katniss", true), member("Rue", true)],
+            &[],
+            &memories,
+            " The woods. ",
+            " Keep it short. ",
+        );
         let expected = format!(
             "# The scene\n\nThe woods.\n\n# In the scene\n\nKatniss, Rue\n\n# Memories\n\n{MEMORIES}\n\n- Peeta saved Katniss.\n- Rue is hurt.\n\n# Author's note\n\n{NOTE}\n\nKeep it short."
         );
@@ -1097,7 +1247,17 @@ mod tests {
     fn summaries_keep_the_latest_turns() {
         let prompt = |text: &str| StoredMessage::new(Role::User, text.into());
         let reply = |text: &str| StoredMessage::new(Role::Assistant, text.into());
-        let history = [prompt("a"), reply("A"), prompt("b"), reply("B"), prompt("c"), reply("C"), prompt("d"), reply("D"), prompt("new")];
+        let history = [
+            prompt("a"),
+            reply("A"),
+            prompt("b"),
+            reply("B"),
+            prompt("c"),
+            reply("C"),
+            prompt("d"),
+            reply("D"),
+            prompt("new"),
+        ];
         // Before a new prompt: up to three earlier turns stay, while they fit.
         assert_eq!(summary_cut(&history, 8, 10_000), 2);
         assert_eq!(summary_cut(&history, 8, 4), 4, "only what fits the budget");
@@ -1118,7 +1278,10 @@ mod tests {
         (summary.compaction, summary.kept) = (true, 2);
         let history = [prompt("a"), reply("A"), prompt("b"), reply("B"), summary, prompt("new")];
         let items = input_items(&history);
-        let texts: Vec<&str> = items.iter().filter_map(|i| if let InputItem::Message { text, .. } = i { Some(text.as_str()) } else { None }).collect();
+        let texts: Vec<&str> = items
+            .iter()
+            .filter_map(|i| if let InputItem::Message { text, .. } = i { Some(text.as_str()) } else { None })
+            .collect();
         assert_eq!(texts.len(), 4);
         assert!(texts[0].ends_with("Earlier: a and b.") && texts[1..] == ["b", "B", "new"]);
     }
@@ -1126,7 +1289,8 @@ mod tests {
     #[test]
     fn reviews_start_after_the_prompts_read() {
         let entry = |role, id| Entry::new(id, StoredMessage::new(role, "x".into()));
-        let entries = [entry(Role::User, 1), entry(Role::Assistant, 2), entry(Role::User, 3), entry(Role::Assistant, 4)];
+        let entries =
+            [entry(Role::User, 1), entry(Role::Assistant, 2), entry(Role::User, 3), entry(Role::Assistant, 4)];
         assert_eq!(first_unread(&entries, 0), 0);
         assert_eq!(first_unread(&entries, 1), 2);
         assert_eq!(first_unread(&entries, 2), 4);
@@ -1140,7 +1304,9 @@ mod tests {
         assert_eq!(user_text("  /ooc  skip ahead a day "), format!("{OOC}\n\nskip ahead a day"));
         assert_eq!(user_text("/oocx"), "/oocx", "only the command itself");
         let items = input_items(&[StoredMessage::new(Role::User, "Hi.\n/ooc be brief".into())]);
-        assert!(matches!(&items[0], InputItem::Message { text, .. } if text.ends_with("be brief") && text.contains(OOC)));
+        assert!(
+            matches!(&items[0], InputItem::Message { text, .. } if text.ends_with("be brief") && text.contains(OOC))
+        );
         assert_eq!(tools::user_display("I *wave*.\n/ooc a *dark* turn"), "I *wave*.\n\n*OOC: a dark turn*");
         assert_eq!(tools::split_ooc("/ooc"), ("", None));
     }
@@ -1158,7 +1324,12 @@ mod tests {
         summary.compaction = true;
         let mut failed = summary.clone();
         failed.failed = true;
-        let history = [StoredMessage::new(Role::User, "old".into()), summary, StoredMessage::new(Role::User, "next".into()), failed];
+        let history = [
+            StoredMessage::new(Role::User, "old".into()),
+            summary,
+            StoredMessage::new(Role::User, "next".into()),
+            failed,
+        ];
         let items = input_items(&history);
         assert_eq!(items.len(), 2, "old messages and the failed summary are left out");
         assert!(matches!(&items[0], InputItem::Message { role: Role::User, text } if text.ends_with("did A")));
@@ -1172,6 +1343,8 @@ mod tests {
         let items = input_items(&[StoredMessage::new(Role::User, "Hi".into()), reply]);
         assert_eq!(items.len(), 3, "a reply of only calls sends no empty text");
         assert!(matches!(&items[1], InputItem::ToolCall(call) if call.call_id == "c"));
-        assert!(matches!(&items[2], InputItem::ToolOutput { call_id, output } if call_id == "c" && output == "Spoken."));
+        assert!(
+            matches!(&items[2], InputItem::ToolOutput { call_id, output } if call_id == "c" && output == "Spoken.")
+        );
     }
 }

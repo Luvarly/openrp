@@ -85,7 +85,8 @@ pub fn resolve(cast: &[CastMember], player: Option<&Player>, name: &str) -> Opti
     if let Some((who, ..)) = people().find(|(_, _, aliases)| aliases.iter().any(|a| same(a, name))) {
         return Some(who);
     }
-    let mut matches = people().filter(|(_, own, aliases)| overlaps(own, name) || aliases.iter().any(|a| overlaps(a, name)));
+    let mut matches =
+        people().filter(|(_, own, aliases)| overlaps(own, name) || aliases.iter().any(|a| overlaps(a, name)));
     match (matches.next(), matches.next()) {
         (Some((who, ..)), None) => Some(who),
         _ => None,
@@ -119,7 +120,8 @@ mod tests {
 
     #[test]
     fn names_find_their_character() {
-        let cast = cast(&[("Captain Rex", &[]), ("Zoë", &[]), ("Alice", &["Bob"]), ("Shaak Ti", &[]), ("Mira O'Hara", &[])]);
+        let cast =
+            cast(&[("Captain Rex", &[]), ("Zoë", &[]), ("Alice", &["Bob"]), ("Shaak Ti", &[]), ("Mira O'Hara", &[])]);
         let player = Player { name: "Gale Hawthorne".into(), ..Player::default() };
         let who = |name: &str| resolve(&cast, Some(&player), name);
         assert_eq!(who("captain  REX"), Some(Who::Member(0)), "case and spacing");

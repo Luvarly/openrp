@@ -27,7 +27,9 @@ mod turns;
 use std::sync::atomic::Ordering;
 
 use arboard::Clipboard;
-use openrp_core::{CastMember, Error, Model, Player, Role, Session, SessionSummary, StoredMessage, Usage, new_id, unix_now};
+use openrp_core::{
+    CastMember, Error, Model, Player, Role, Session, SessionSummary, StoredMessage, Usage, new_id, unix_now,
+};
 use winit::event::KeyEvent;
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 
@@ -79,7 +81,8 @@ pub enum Reasoning {
 }
 
 impl Reasoning {
-    const ALL: [Self; 8] = [Self::Auto, Self::Off, Self::Minimal, Self::Low, Self::Medium, Self::High, Self::ExtraHigh, Self::Max];
+    const ALL: [Self; 8] =
+        [Self::Auto, Self::Off, Self::Minimal, Self::Low, Self::Medium, Self::High, Self::ExtraHigh, Self::Max];
 
     /// Value stored in the config file; also the API's effort name.
     #[must_use]
@@ -105,7 +108,10 @@ impl Reasoning {
     /// The choices for `model`: Auto plus the efforts it accepts, or every
     /// effort while the model list is unknown.
     fn choices(model: Option<&Model>) -> Vec<Self> {
-        Self::ALL.into_iter().filter(|r| *r == Self::Auto || model.is_none_or(|m| m.reasoning_levels.iter().any(|l| l == r.key()))).collect()
+        Self::ALL
+            .into_iter()
+            .filter(|r| *r == Self::Auto || model.is_none_or(|m| m.reasoning_levels.iter().any(|l| l == r.key())))
+            .collect()
     }
 
     fn label(self) -> &'static str {
@@ -330,7 +336,9 @@ impl Entry {
 
     /// Whether the reasoning text is shown under `view`.
     fn reasoning_shown(&self, view: ReasoningView) -> bool {
-        view != ReasoningView::Hidden && !self.message.reasoning.is_empty() && self.reasoning_open.unwrap_or(view == ReasoningView::Expanded)
+        view != ReasoningView::Hidden
+            && !self.message.reasoning.is_empty()
+            && self.reasoning_open.unwrap_or(view == ReasoningView::Expanded)
     }
 }
 
@@ -467,12 +475,20 @@ impl Conversation {
 
     /// What the story cost, the replies swiped away included.
     fn cost(&self) -> f64 {
-        if self.load == Load::Loaded { self.entries.iter().map(|e| e.message.total_cost()).sum() } else { self.indexed_cost }
+        if self.load == Load::Loaded {
+            self.entries.iter().map(|e| e.message.total_cost()).sum()
+        } else {
+            self.indexed_cost
+        }
     }
 
     /// Tokens billed for the story, the replies swiped away included.
     fn tokens(&self) -> u64 {
-        if self.load == Load::Loaded { self.entries.iter().map(|e| e.message.total_tokens()).sum() } else { self.indexed_tokens }
+        if self.load == Load::Loaded {
+            self.entries.iter().map(|e| e.message.total_tokens()).sum()
+        } else {
+            self.indexed_tokens
+        }
     }
 
     /// Streaming or waiting to retry.
@@ -523,7 +539,12 @@ impl MenuItem {
     fn record(record: &Record) -> Self {
         let tags = record.tags.join(", ");
         let detail = if record.comment.is_empty() { tags.as_str() } else { record.comment.as_str() };
-        Self { face: true, image: record.portrait.clone(), search: format!("{} {tags}", record.comment), ..Self::new(&record.name, detail) }
+        Self {
+            face: true,
+            image: record.portrait.clone(),
+            search: format!("{} {tags}", record.comment),
+            ..Self::new(&record.name, detail)
+        }
     }
 }
 
@@ -681,7 +702,11 @@ impl Chat {
 
     /// The effort requests use: the chosen one if the model accepts it.
     fn reasoning_in_use(&self) -> Reasoning {
-        if Reasoning::choices(self.selected_model()).contains(&self.reasoning) { self.reasoning } else { Reasoning::Auto }
+        if Reasoning::choices(self.selected_model()).contains(&self.reasoning) {
+            self.reasoning
+        } else {
+            Reasoning::Auto
+        }
     }
 
     /// The effort to send with a story request, `None` for the model's default.
@@ -706,7 +731,11 @@ impl Chat {
     fn summary_model(&self) -> (String, Option<&'static str>) {
         let (model, reasoning) = self.side_model();
         let window = |id: &str| self.models.iter().find(|m| m.id == id).map_or(0, |m| m.context_window);
-        if model != self.model && window(&model) < window(&self.model) { (self.model.clone(), self.reasoning_key()) } else { (model, reasoning) }
+        if model != self.model && window(&model) < window(&self.model) {
+            (self.model.clone(), self.reasoning_key())
+        } else {
+            (model, reasoning)
+        }
     }
 
     /// Sets the model for work beside the story; `None` uses the story's.
@@ -816,7 +845,8 @@ impl Chat {
 
     /// Deletes every story played in `world` (which was just deleted).
     fn delete_world_stories(&mut self, world: &str, actions: &mut Vec<Action>) {
-        let doomed: Vec<u64> = self.conversations.iter().filter(|c| c.world.as_deref() == Some(world)).map(|c| c.id).collect();
+        let doomed: Vec<u64> =
+            self.conversations.iter().filter(|c| c.world.as_deref() == Some(world)).map(|c| c.id).collect();
         for id in doomed {
             self.delete_conversation(id, actions);
         }
@@ -933,7 +963,11 @@ impl Chat {
     pub(super) fn export(&mut self, id: u64, jsonl: bool, actions: &mut Vec<Action>) {
         let Some(conversation) = self.read_first(id, Pending::Export(jsonl), actions) else { return };
         let session = conversation.to_session();
-        let world = session.world.as_deref().and_then(|w| self.library.get(Kind::World, w)).map_or_else(String::new, |w| w.name.clone());
+        let world = session
+            .world
+            .as_deref()
+            .and_then(|w| self.library.get(Kind::World, w))
+            .map_or_else(String::new, |w| w.name.clone());
         actions.push(Action::ExportStory { session, world, jsonl });
     }
 
@@ -944,7 +978,8 @@ impl Chat {
         if conversation.entries.is_empty() || conversation.load != Load::Loaded {
             return;
         }
-        let (id, world, cast, player) = (conversation.id, conversation.world.clone(), conversation.cast.clone(), conversation.player.clone());
+        let (id, world, cast, player) =
+            (conversation.id, conversation.world.clone(), conversation.cast.clone(), conversation.player.clone());
         let note = conversation.note.clone();
         self.delete_conversation(id, actions);
         let fresh = self.current();
@@ -963,7 +998,8 @@ impl Chat {
     /// the copy that was waiting for them, if one was.
     pub fn session_loaded(&mut self, conversation: u64, result: Result<Session, Error>, actions: &mut Vec<Action>) {
         let conversation_id = conversation;
-        let Some(index) = self.conversations.iter().position(|c| c.id == conversation && c.load == Load::Loading) else {
+        let Some(index) = self.conversations.iter().position(|c| c.id == conversation && c.load == Load::Loading)
+        else {
             return;
         };
         let session = match result {
@@ -1039,7 +1075,11 @@ impl Chat {
     /// Usage summed over every conversation with messages.
     fn totals(&self) -> Totals {
         let saved = self.conversations.iter().filter(|c| !c.is_fresh());
-        saved.fold(Totals::default(), |t, c| Totals { cost: t.cost + c.cost(), tokens: t.tokens + c.tokens(), sessions: t.sessions + 1 })
+        saved.fold(Totals::default(), |t, c| Totals {
+            cost: t.cost + c.cost(),
+            tokens: t.tokens + c.tokens(),
+            sessions: t.sessions + 1,
+        })
     }
 
     /// Takes the composer text and starts a reply, if sending is possible.
@@ -1050,7 +1090,12 @@ impl Chat {
         // Sending into an unloaded session would save it without its history;
         // a story starts with Play, in a world. Replies being edited are
         // saved or cancelled first.
-        if conversation.load != Load::Loaded || conversation.busy() || !has_content || !conversation.playable() || editing {
+        if conversation.load != Load::Loaded
+            || conversation.busy()
+            || !has_content
+            || !conversation.playable()
+            || editing
+        {
             return;
         }
         // The model list failed to load: try again now.
@@ -1111,7 +1156,12 @@ impl Chat {
 
     /// Character cards were read: they join the library (see
     /// [`LibraryView::imported`]), and files that could not be read are told.
-    pub fn cards_imported(&mut self, characters: Vec<openrp_core::Character>, errors: Vec<String>, actions: &mut Vec<Action>) {
+    pub fn cards_imported(
+        &mut self,
+        characters: Vec<openrp_core::Character>,
+        errors: Vec<String>,
+        actions: &mut Vec<Action>,
+    ) {
         if !characters.is_empty() && self.page != Page::Library(Kind::Character) {
             self.show(Page::Library(Kind::Character));
         }
@@ -1272,7 +1322,13 @@ impl Chat {
     }
 
     /// Keyboard input.
-    pub fn key(&mut self, event: &KeyEvent, mods: ModifiersState, cb: &mut Option<Clipboard>, actions: &mut Vec<Action>) {
+    pub fn key(
+        &mut self,
+        event: &KeyEvent,
+        mods: ModifiersState,
+        cb: &mut Option<Clipboard>,
+        actions: &mut Vec<Action>,
+    ) {
         let primary = if cfg!(target_os = "macos") { mods.super_key() } else { mods.control_key() };
         if let Some(spotlight) = &mut self.spotlight {
             match spotlight.key(event, mods, cb) {
@@ -1315,7 +1371,9 @@ impl Chat {
                 }
             }
             // Copy a message selection; otherwise the composer handles it.
-            Key::Character(c) if primary && is(c, "c") && self.composer.selection().is_empty() && self.selection.is_some() => {
+            Key::Character(c)
+                if primary && is(c, "c") && self.composer.selection().is_empty() && self.selection.is_some() =>
+            {
                 if let Some(text) = self.selected_text() {
                     copy(cb, &text);
                 }
@@ -1371,8 +1429,14 @@ impl Chat {
         let toolbar = match self.page {
             Page::Settings => {
                 let totals = self.totals();
-                let utility = self.utility_model.as_deref().map_or("Same as the story", |id| model_name(&self.models, id)).to_owned();
-                if let Some(anchor) = self.settings.draw(p, ui, main, scheme, self.reasoning_view, &utility, totals, actions) {
+                let utility = self
+                    .utility_model
+                    .as_deref()
+                    .map_or("Same as the story", |id| model_name(&self.models, id))
+                    .to_owned();
+                if let Some(anchor) =
+                    self.settings.draw(p, ui, main, scheme, self.reasoning_view, &utility, totals, actions)
+                {
                     self.menu = if self.menu == Some(Menu::UtilityModel) { None } else { Some(Menu::UtilityModel) };
                     self.menu_scroll = 0.0;
                     self.utility_anchor = anchor;
@@ -1410,8 +1474,11 @@ impl Chat {
                     self.draw_character_form(p, ui, body, actions);
                     [Rect::default(); 3]
                 } else {
-                    let (composer_top, toolbar) =
-                        if self.current().playable() { self.draw_composer(p, ui, main, actions) } else { (main.bottom(), [Rect::default(); 3]) };
+                    let (composer_top, toolbar) = if self.current().playable() {
+                        self.draw_composer(p, ui, main, actions)
+                    } else {
+                        (main.bottom(), [Rect::default(); 3])
+                    };
                     let messages = Rect::new(main.x, strip_bottom, main.w, composer_top - strip_bottom - 12.0);
                     self.draw_messages(p, ui, messages, actions);
                     toolbar
@@ -1439,7 +1506,11 @@ impl Chat {
                     .iter()
                     .filter(|c| !c.is_fresh())
                     .map(|c| {
-                        let world = c.world.as_deref().and_then(|w| self.library.get(Kind::World, w)).map_or("", |w| w.name.as_str());
+                        let world = c
+                            .world
+                            .as_deref()
+                            .and_then(|w| self.library.get(Kind::World, w))
+                            .map_or("", |w| w.name.as_str());
                         crate::spotlight::SessionRef { id: &c.session_id, title: &c.title, world, updated: c.updated }
                     })
                     .collect(),
@@ -1474,7 +1545,8 @@ impl Chat {
         let (tokens, cost) = (conversation.tokens(), conversation.cost());
         let (world, title) = (conversation.world.clone(), conversation.title.clone());
         // The world first, then what this story is about.
-        let world = world.map(|id| self.library.get(Kind::World, &id).map_or("A deleted world".to_owned(), |w| w.name.clone()));
+        let world =
+            world.map(|id| self.library.get(Kind::World, &id).map_or("A deleted world".to_owned(), |w| w.name.clone()));
         let title = match (world, title.is_empty()) {
             (Some(world), true) => world,
             (Some(world), false) => format!("{world}  ·  {title}"),
@@ -1671,8 +1743,17 @@ mod tests {
             if let Some(stream) = &mut chat.current().stream {
                 stream.started -= std::time::Duration::from_secs(3);
             }
-            chat.stream_event(job.conversation, job.stream, StreamEvent::ToolCallStarted { index: 0, name: tools::SPEAK.into() });
-            finish_saying(&mut chat, &job, "answer", Completion { reasoning: reasoning.into(), ..Completion::default() });
+            chat.stream_event(
+                job.conversation,
+                job.stream,
+                StreamEvent::ToolCallStarted { index: 0, name: tools::SPEAK.into() },
+            );
+            finish_saying(
+                &mut chat,
+                &job,
+                "answer",
+                Completion { reasoning: reasoning.into(), ..Completion::default() },
+            );
             let ms = chat.current().entries.last().map(|e| e.message.reasoning_ms);
             assert_eq!(ms.is_some_and(|ms| ms >= 3000), !reasoning.is_empty(), "reasoning {reasoning:?}");
         }
@@ -1821,7 +1902,9 @@ mod tests {
         for turn in 1..=8 {
             let job = start(&mut chat, &format!("turn {turn}"));
             let actions = finish_saying(&mut chat, &job, "Go on.", Completion::default());
-            review = review.or(actions.into_iter().find_map(|a| if let Action::ReviewMemories(job) = a { Some(job) } else { None }));
+            review = review.or(actions
+                .into_iter()
+                .find_map(|a| if let Action::ReviewMemories(job) = a { Some(job) } else { None }));
         }
         let review = review.expect("a review");
         assert_eq!(chat.current().reviewed, 8);
@@ -1830,7 +1913,11 @@ mod tests {
         assert!(review.cancel.load(Ordering::Relaxed) && c.reviewing.is_none());
         assert_eq!(c.reviewed, 0, "its turns are read next time");
         // Its late answer is dropped.
-        let remember = ToolCall { call_id: "m".into(), name: tools::REMEMBER.into(), arguments: r#"{"memories":["Late."]}"#.into() };
+        let remember = ToolCall {
+            call_id: "m".into(),
+            name: tools::REMEMBER.into(),
+            arguments: r#"{"memories":["Late."]}"#.into(),
+        };
         let id = c.id;
         chat.memories_reviewed(id, review.request, Ok((Some(remember), Usage::default())), &mut Vec::new());
         assert!(chat.current().memories.is_empty());
@@ -1859,7 +1946,11 @@ mod tests {
         let mut chat = new_chat();
         let job = start(&mut chat, "go");
         chat.stream_event(job.conversation, job.stream, StreamEvent::Text("A narrator says.".into()));
-        chat.stream_event(job.conversation, job.stream, StreamEvent::ToolCallStarted { index: 0, name: tools::SPEAK.into() });
+        chat.stream_event(
+            job.conversation,
+            job.stream,
+            StreamEvent::ToolCallStarted { index: 0, name: tools::SPEAK.into() },
+        );
         let half = r#"{"messages":[{"character":"Gale","text":"half"#;
         chat.stream_event(job.conversation, job.stream, StreamEvent::ToolCallDelta { index: 0, delta: half.into() });
         chat.stop(&mut Vec::new());
@@ -1873,9 +1964,16 @@ mod tests {
     fn replies_cut_off_say_so() {
         let mut chat = new_chat();
         let job = start(&mut chat, "write it");
-        let actions = finish_saying(&mut chat, &job, "Long", Completion { incomplete: Some("max_output_tokens".into()), ..Completion::default() });
+        let actions = finish_saying(
+            &mut chat,
+            &job,
+            "Long",
+            Completion { incomplete: Some("max_output_tokens".into()), ..Completion::default() },
+        );
         assert!(next_send(actions).is_none());
-        assert!(chat.current().entries.last().is_some_and(|e| e.message.failed && e.message.content.contains("cut off")));
+        assert!(
+            chat.current().entries.last().is_some_and(|e| e.message.failed && e.message.content.contains("cut off"))
+        );
     }
 
     #[test]
@@ -1888,7 +1986,8 @@ mod tests {
         let summary = start(&mut chat, "second");
         assert!(summary.history.last().is_some_and(|m| m.role == Role::User && m.content.contains("summary")));
         chat.stream_event(summary.conversation, summary.stream, StreamEvent::Text("They said first.".into()));
-        let actions = finish(&mut chat, &summary, Completion { usage: Usage::new(121_000, 50), ..Completion::default() });
+        let actions =
+            finish(&mut chat, &summary, Completion { usage: Usage::new(121_000, 50), ..Completion::default() });
         let reply = next_send(actions).expect("the reply");
         let items = input_items(&reply.history);
         assert_eq!(items.len(), 2, "the summary, then the new prompt word for word");
@@ -1943,7 +2042,11 @@ mod tests {
     fn memories_are_kept_and_undone_with_their_reply() {
         let mut chat = new_chat();
         let job = start(&mut chat, "I promise.");
-        let remember = ToolCall { call_id: "r".into(), name: tools::REMEMBER.into(), arguments: r#"{"memories":["Gale promised to return."]}"#.into() };
+        let remember = ToolCall {
+            call_id: "r".into(),
+            name: tools::REMEMBER.into(),
+            arguments: r#"{"memories":["Gale promised to return."]}"#.into(),
+        };
         let completion = Completion { tool_calls: vec![said("I will."), remember], ..Completion::default() };
         assert!(next_send(finish(&mut chat, &job, completion)).is_none(), "speech ends the turn");
         assert_eq!(chat.current().memories, ["Gale promised to return."]);
@@ -1957,7 +2060,9 @@ mod tests {
 
     #[test]
     fn memories_are_reviewed_every_few_prompts() {
-        let review_of = |actions: Vec<Action>| actions.into_iter().find_map(|a| if let Action::ReviewMemories(job) = a { Some(job) } else { None });
+        let review_of = |actions: Vec<Action>| {
+            actions.into_iter().find_map(|a| if let Action::ReviewMemories(job) = a { Some(job) } else { None })
+        };
         let mut chat = new_chat();
         let mut due = None;
         for turn in 1..=8 {
@@ -1968,7 +2073,11 @@ mod tests {
         let review = due.expect("a review after eight prompts");
         assert!(review.transcript.starts_with("Gale: turn 1") && review.transcript.ends_with("Gale: Go on."));
         let (id, memory) = (chat.current().id, r#"{"memories":["Gale trusts Peeta."]}"#);
-        let remember = |arguments: &str| ToolCall { call_id: "m".into(), name: tools::REMEMBER.into(), arguments: arguments.into() };
+        let remember = |arguments: &str| ToolCall {
+            call_id: "m".into(),
+            name: tools::REMEMBER.into(),
+            arguments: arguments.into(),
+        };
 
         // One at a time, even when asked.
         let mut actions = Vec::new();
@@ -1977,8 +2086,15 @@ mod tests {
 
         // The answer joins the memories once; a repeat of it is stale.
         chat.memories_reviewed(id, review.request, Ok((Some(remember(memory)), Usage::new(10, 5))), &mut actions);
-        assert!(matches!(&actions[..], [Action::SaveSession(s)] if s.memories == ["Gale trusts Peeta."] && s.reviewed == 8));
-        chat.memories_reviewed(id, review.request, Ok((Some(remember(r#"{"memories":["Stale."]}"#)), Usage::default())), &mut Vec::new());
+        assert!(
+            matches!(&actions[..], [Action::SaveSession(s)] if s.memories == ["Gale trusts Peeta."] && s.reviewed == 8)
+        );
+        chat.memories_reviewed(
+            id,
+            review.request,
+            Ok((Some(remember(r#"{"memories":["Stale."]}"#)), Usage::default())),
+            &mut Vec::new(),
+        );
         assert_eq!(chat.current().memories, ["Gale trusts Peeta."]);
 
         // Not due again at once; /memorize reads what came since.
@@ -1998,27 +2114,46 @@ mod tests {
     #[test]
     fn stories_duplicate_exactly_or_as_a_frame() {
         let mut chat = new_chat();
-        chat.current().cast.push(CastMember { id: "k".into(), name: "Katniss".into(), description: "A hunter.".into(), present: true, ..CastMember::default() });
+        chat.current().cast.push(CastMember {
+            id: "k".into(),
+            name: "Katniss".into(),
+            description: "A hunter.".into(),
+            present: true,
+            ..CastMember::default()
+        });
         let job = start(&mut chat, "Hello.");
         finish_saying(&mut chat, &job, "Hi.", Completion { usage: Usage::new(10, 5), ..Completion::default() });
         let original = chat.current();
         original.entries.last_mut().unwrap().message.cost = 0.25;
-        (original.scene, original.memories, original.note) = ("The woods.".into(), vec!["A fact.".into()], "Be brief.".into());
+        (original.scene, original.memories, original.note) =
+            ("The woods.".into(), vec!["A fact.".into()], "Be brief.".into());
         let (source, source_session) = (original.id, original.session_id.clone());
 
         let mut actions = Vec::new();
         chat.duplicate(source, false, &mut actions);
         let [Action::SaveSession(copy)] = &actions[..] else { panic!("not saved") };
         assert!(copy.id != source_session && copy.title == "Hello. (copy)" && copy.messages.len() == 2);
-        assert!(copy.scene == "The woods." && copy.memories == ["A fact."] && copy.note == "Be brief." && copy.cast.len() == 1);
+        assert!(
+            copy.scene == "The woods."
+                && copy.memories == ["A fact."]
+                && copy.note == "Be brief."
+                && copy.cast.len() == 1
+        );
         assert!(copy.messages.iter().all(|m| m.cost == 0.0), "the replies were paid for once");
         assert!(chat.current().id != source && chat.current().entries.len() == 2, "the copy is open");
 
         let mut actions = Vec::new();
         chat.duplicate(source, true, &mut actions);
         let [Action::SaveSession(frame)] = &actions[..] else { panic!("not saved") };
-        assert!(frame.messages.is_empty() && frame.memories.is_empty() && frame.scene.is_empty() && frame.title.is_empty());
-        assert!(frame.cast.len() == 1 && frame.note == "Be brief." && frame.player.is_some() && frame.world.as_deref() == Some("w"));
+        assert!(
+            frame.messages.is_empty() && frame.memories.is_empty() && frame.scene.is_empty() && frame.title.is_empty()
+        );
+        assert!(
+            frame.cast.len() == 1
+                && frame.note == "Be brief."
+                && frame.player.is_some()
+                && frame.world.as_deref() == Some("w")
+        );
         assert!(chat.current().playable(), "a frame is ready to play");
 
         // A session not read yet is read first, then copied.
@@ -2041,7 +2176,9 @@ mod tests {
         let command = chat.commands()[chat.command_pick];
         chat.run_command(command, &mut actions);
         assert!(job.cancel.load(Ordering::Relaxed), "the running reply is stopped");
-        assert!(matches!(&actions[..], [Action::DeleteSession(_), Action::SaveSession(s)] if s.messages.is_empty() && s.player.is_some()));
+        assert!(
+            matches!(&actions[..], [Action::DeleteSession(_), Action::SaveSession(s)] if s.messages.is_empty() && s.player.is_some())
+        );
         assert!(chat.current().entries.is_empty() && chat.current().playable());
         assert!(chat.composer.text().is_empty());
 
@@ -2067,11 +2204,19 @@ mod tests {
             ..CastMember::default()
         });
         let job = start(&mut chat, "I call out.");
-        assert!(job.tools && job.tool_choice == Some(openrp_core::ToolChoice::Required) && job.instructions.contains("There is no narrator"));
+        assert!(
+            job.tools
+                && job.tool_choice == Some(openrp_core::ToolChoice::Required)
+                && job.instructions.contains("There is no narrator")
+        );
 
         // Speech shows while its call is written.
         chat.stream_event(job.conversation, job.stream, StreamEvent::Text("Leaves rustle.".into()));
-        chat.stream_event(job.conversation, job.stream, StreamEvent::ToolCallStarted { index: 1, name: tools::SPEAK.into() });
+        chat.stream_event(
+            job.conversation,
+            job.stream,
+            StreamEvent::ToolCallStarted { index: 1, name: tools::SPEAK.into() },
+        );
         let partial = r#"{"lines":[{"character":"Katniss","text":"Who's th"#;
         chat.stream_event(job.conversation, job.stream, StreamEvent::ToolCallDelta { index: 1, delta: partial.into() });
         let entry = chat.current().entries.last_mut().unwrap();
@@ -2089,13 +2234,18 @@ mod tests {
 
         // A reply that only created someone carries on by itself.
         let job = start(&mut chat, "Me.");
-        let created =
-            ToolCall { call_id: "c1".into(), name: tools::CREATE_CHARACTER.into(), arguments: r#"{"name":"Cato","description":"A career."}"#.into() };
+        let created = ToolCall {
+            call_id: "c1".into(),
+            name: tools::CREATE_CHARACTER.into(),
+            arguments: r#"{"name":"Cato","description":"A career."}"#.into(),
+        };
         let fresh = start_over(&mut chat, &job, Completion { tool_calls: vec![created], ..Completion::default() });
         let next = fresh.expect("the model continues after creating a character");
         assert!(chat.current().cast.iter().any(|m| m.name == "Cato" && m.present));
         let items = input_items(&next.history);
-        assert!(items.iter().any(|i| matches!(i, InputItem::ToolOutput { output, .. } if output.contains("Cato joined"))));
+        assert!(
+            items.iter().any(|i| matches!(i, InputItem::ToolOutput { output, .. } if output.contains("Cato joined")))
+        );
         assert!(next.instructions.contains("## Cato"), "the new character is in the prompt");
 
         // Speech ends the turn; its result goes back with the next prompt.
@@ -2104,16 +2254,24 @@ mod tests {
             name: tools::SPEAK.into(),
             arguments: r#"{"lines":[{"character":"Cato","action":"grins","text":"Found you."},{"character":"Katniss","text":"Run!"}]}"#.into(),
         };
-        assert!(start_over(&mut chat, &next, Completion { tool_calls: vec![spoken], ..Completion::default() }).is_none());
+        assert!(
+            start_over(&mut chat, &next, Completion { tool_calls: vec![spoken], ..Completion::default() }).is_none()
+        );
         let entry = chat.current().entries.last_mut().unwrap();
         entry.refresh_display(false, true);
         assert_eq!(entry.display, "**Cato**: *grins* Found you.\n\n**Katniss**: Run!");
         assert_eq!(entry.message.tool_calls[0].output, "Spoken.");
         let follow = start(&mut chat, "I run.");
-        assert!(matches!(input_items(&follow.history).last(), Some(InputItem::Message { text, .. }) if text == "I run."));
+        assert!(
+            matches!(input_items(&follow.history).last(), Some(InputItem::Message { text, .. }) if text == "I run.")
+        );
 
         // Speech still being written when the user stops stays as text.
-        chat.stream_event(follow.conversation, follow.stream, StreamEvent::ToolCallStarted { index: 0, name: tools::SPEAK.into() });
+        chat.stream_event(
+            follow.conversation,
+            follow.stream,
+            StreamEvent::ToolCallStarted { index: 0, name: tools::SPEAK.into() },
+        );
         chat.stream_event(
             follow.conversation,
             follow.stream,
@@ -2124,7 +2282,10 @@ mod tests {
         entry.refresh_display(false, true);
         assert_eq!(entry.display, "**Cato**: Wait", "speech being written when the user stops stays");
         assert!(entry.message.tool_calls[0].output.starts_with("Not run") && entry.message.content.is_empty());
-        assert_eq!(entry.message.tool_calls[0].call.arguments, r#"{"lines":[{"character":"Cato","text":"Wait"}]}"#, "valid JSON");
+        assert_eq!(
+            entry.message.tool_calls[0].call.arguments, r#"{"lines":[{"character":"Cato","text":"Wait"}]}"#,
+            "valid JSON"
+        );
     }
 
     /// Completes `job` and returns the request it led to, if any.
@@ -2179,7 +2340,10 @@ mod tests {
         let calls = &chat.current().entries.last().unwrap().message.tool_calls;
         assert_eq!(calls[0].output, "Spoken.", "Mira was created before she spoke");
         let follow = start(&mut chat, "A beer, please.");
-        assert!(follow.instructions.contains("## Mira") && !follow.state.as_deref().is_some_and(|s| s.contains("No one is in the scene yet")));
+        assert!(
+            follow.instructions.contains("## Mira")
+                && !follow.state.as_deref().is_some_and(|s| s.contains("No one is in the scene yet"))
+        );
     }
 
     #[test]
@@ -2190,7 +2354,9 @@ mod tests {
         let introduced = r#"{"introduce":[{"name":"Rex","description":"A clone captain."}],"lines":[{"character":"Rex","text":"General."}]}"#;
         let speak = ToolCall { call_id: "s1".into(), name: tools::SPEAK.into(), arguments: introduced.into() };
         assert!(start_over(&mut chat, &job, Completion { tool_calls: vec![speak], ..Completion::default() }).is_none());
-        assert!(chat.current().cast.iter().any(|m| m.name == "Rex" && m.description == "A clone captain." && m.present));
+        assert!(
+            chat.current().cast.iter().any(|m| m.name == "Rex" && m.description == "A clone captain." && m.present)
+        );
         let entry = chat.current().entries.last_mut().unwrap();
         entry.refresh_display(false, true);
         assert_eq!(entry.display, "*Rex joins the story*\n\n**Rex**: General.");
@@ -2198,9 +2364,11 @@ mod tests {
         // Someone acting without being introduced is not cast half-made: the
         // model is made to describe them next.
         let job = start(&mut chat, "Who else is here?");
-        let skipped = r#"{"introduce":[],"lines":[{"character":"Kicker","action":"checks his rifle","text":"Just us, sir."}]}"#;
+        let skipped =
+            r#"{"introduce":[],"lines":[{"character":"Kicker","action":"checks his rifle","text":"Just us, sir."}]}"#;
         let speak = ToolCall { call_id: "s2".into(), name: tools::SPEAK.into(), arguments: skipped.into() };
-        let repair = start_over(&mut chat, &job, Completion { tool_calls: vec![speak], ..Completion::default() }).expect("a repair");
+        let repair = start_over(&mut chat, &job, Completion { tool_calls: vec![speak], ..Completion::default() })
+            .expect("a repair");
         assert!(!chat.current().cast.iter().any(|m| m.name == "Kicker"));
         assert_eq!(repair.tool_choice, Some(openrp_core::ToolChoice::Function(tools::CREATE_CHARACTER)));
         let items = input_items(&repair.history);
@@ -2214,7 +2382,10 @@ mod tests {
             name: tools::CREATE_CHARACTER.into(),
             arguments: r#"{"name":"Kicker","description":"A clone trooper."}"#.into(),
         };
-        assert!(start_over(&mut chat, &repair, Completion { tool_calls: vec![described], ..Completion::default() }).is_none());
+        assert!(
+            start_over(&mut chat, &repair, Completion { tool_calls: vec![described], ..Completion::default() })
+                .is_none()
+        );
         assert!(chat.current().cast.iter().any(|m| m.name == "Kicker" && m.description == "A clone trooper."));
         let next = start(&mut chat, "Good.");
         assert_eq!(next.tool_choice, Some(openrp_core::ToolChoice::Required), "back to normal");
@@ -2224,7 +2395,9 @@ mod tests {
         let mut job = next;
         let mut calls = vec![ToolCall { call_id: "s3".into(), name: tools::SPEAK.into(), arguments: skipped.into() }];
         let mut rounds = 0;
-        while let Some(again) = start_over(&mut chat, &job, Completion { tool_calls: std::mem::take(&mut calls), ..Completion::default() }) {
+        while let Some(again) =
+            start_over(&mut chat, &job, Completion { tool_calls: std::mem::take(&mut calls), ..Completion::default() })
+        {
             rounds += 1;
             job = again;
             calls = vec![ToolCall {

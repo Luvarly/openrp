@@ -75,7 +75,12 @@ impl Rect {
     pub fn intersect(self, other: Self) -> Self {
         let x = self.x.max(other.x);
         let y = self.y.max(other.y);
-        Self::new(x, y, (self.right().min(other.right()) - x).max(0.0), (self.bottom().min(other.bottom()) - y).max(0.0))
+        Self::new(
+            x,
+            y,
+            (self.right().min(other.right()) - x).max(0.0),
+            (self.bottom().min(other.bottom()) - y).max(0.0),
+        )
     }
 }
 
@@ -132,7 +137,13 @@ impl<'a> Painter<'a> {
         let lookup = self.images.lookup(&key);
         if let Lookup::Ready(uv) = lookup {
             // Exactly the thumbnail's pixels, so texels map one to one.
-            self.push(Rect::new(left / s, top / s, width / s, height / s), [1.0; 4], [1.0; 4], [radius, 0.0, 0.0, KIND_IMAGE], uv);
+            self.push(
+                Rect::new(left / s, top / s, width / s, height / s),
+                [1.0; 4],
+                [1.0; 4],
+                [radius, 0.0, 0.0, KIND_IMAGE],
+                uv,
+            );
         }
         lookup
     }
@@ -159,10 +170,21 @@ impl<'a> Painter<'a> {
         let c = self.clip;
         // Cheap CPU cull; the shader clips exactly. Pad for blur falloff.
         let pad = params[2] + 1.0;
-        if rect.right() + pad < c.x || rect.x - pad > c.right() || rect.bottom() + pad < c.y || rect.y - pad > c.bottom() {
+        if rect.right() + pad < c.x
+            || rect.x - pad > c.right()
+            || rect.bottom() + pad < c.y
+            || rect.y - pad > c.bottom()
+        {
             return;
         }
-        self.out.push(Instance { rect: [rect.x, rect.y, rect.w, rect.h], clip: [c.x, c.y, c.right(), c.bottom()], color, color2, uv, params });
+        self.out.push(Instance {
+            rect: [rect.x, rect.y, rect.w, rect.h],
+            clip: [c.x, c.y, c.right(), c.bottom()],
+            color,
+            color2,
+            uv,
+            params,
+        });
     }
 
     /// Filled rounded rectangle.
@@ -222,19 +244,20 @@ impl<'a> Painter<'a> {
         let clip = self.clip;
         let out = &mut *self.out;
         let fallback = inks.first().copied().unwrap_or([1.0; 4]);
-        let ok = layout.place(self.fonts, self.atlas, origin, align, [clip.x, clip.y, clip.right(), clip.bottom()], |g| {
-            let ink = inks.get(usize::from(g.ink)).copied().unwrap_or(fallback);
-            // Emoji layers keep their own colours but follow the text's fade.
-            let color = g.color.map_or(ink, |c| [c[0], c[1], c[2], c[3] * ink[3]]);
-            out.push(Instance {
-                rect: g.rect,
-                clip: [clip.x, clip.y, clip.right(), clip.bottom()],
-                color,
-                color2: color,
-                uv: g.uv,
-                params: [0.0, 0.0, 0.0, KIND_GLYPH],
+        let ok =
+            layout.place(self.fonts, self.atlas, origin, align, [clip.x, clip.y, clip.right(), clip.bottom()], |g| {
+                let ink = inks.get(usize::from(g.ink)).copied().unwrap_or(fallback);
+                // Emoji layers keep their own colours but follow the text's fade.
+                let color = g.color.map_or(ink, |c| [c[0], c[1], c[2], c[3] * ink[3]]);
+                out.push(Instance {
+                    rect: g.rect,
+                    clip: [clip.x, clip.y, clip.right(), clip.bottom()],
+                    color,
+                    color2: color,
+                    uv: g.uv,
+                    params: [0.0, 0.0, 0.0, KIND_GLYPH],
+                });
             });
-        });
         self.atlas_full |= !ok;
     }
 

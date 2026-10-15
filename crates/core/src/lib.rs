@@ -26,4 +26,7 @@ pub use config::{Config, lock_instance};
 pub use error::{Error, Result};
 pub use library::{Character, Library, LoreEntry, Persona, Portraits, World};
 pub use responses::{Completion, InputItem, ResponseRequest, Role, StreamEvent, ToolCall, ToolChoice, ToolSpec, Usage};
-pub use session::{CastMember, Player, SearchHit, Session, SessionStore, SessionSummary, StoredMessage, StoryChange, ToolResult, new_id, rename, unix_now};
+pub use session::{
+    CastMember, Player, SearchHit, Session, SessionStore, SessionSummary, StoredMessage, StoryChange, ToolResult,
+    new_id, rename, unix_now,
+};

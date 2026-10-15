@@ -103,7 +103,9 @@ impl Error {
                     | ErrorKind::HostUnreachable
             ),
             Self::Api { status, .. } => *status == 429 || *status >= 500,
-            Self::Response { code, .. } => matches!(code.as_deref(), Some("server_error" | "rate_limit_exceeded") | None),
+            Self::Response { code, .. } => {
+                matches!(code.as_deref(), Some("server_error" | "rate_limit_exceeded") | None)
+            }
             Self::Decode(_) | Self::Config { .. } | Self::NoHomeDir | Self::Newer { .. } => false,
         }
     }
@@ -136,7 +138,9 @@ impl fmt::Display for Error {
             Self::Io(e) => write!(f, "I/O error: {e}"),
             Self::Config { line, message } => write!(f, "config line {line}: {message}"),
             Self::NoHomeDir => f.write_str("could not determine the home directory"),
-            Self::Newer { what } => write!(f, "this {what} was saved by a newer version of OpenRP; update OpenRP to open it"),
+            Self::Newer { what } => {
+                write!(f, "this {what} was saved by a newer version of OpenRP; update OpenRP to open it")
+            }
         }
     }
 }
@@ -147,7 +151,9 @@ impl std::error::Error for Error {
             Self::Transport(e) => Some(e.as_ref()),
             Self::Decode(e) => Some(e),
             Self::Io(e) => Some(e),
-            Self::Api { .. } | Self::Response { .. } | Self::Config { .. } | Self::NoHomeDir | Self::Newer { .. } => None,
+            Self::Api { .. } | Self::Response { .. } | Self::Config { .. } | Self::NoHomeDir | Self::Newer { .. } => {
+                None
+            }
         }
     }
 }
@@ -184,10 +190,24 @@ mod tests {
         let api = |status| Error::Api { status, code: None, message: String::new(), retry_after: None };
         assert!(response("server_error").is_retryable() && response("rate_limit_exceeded").is_retryable());
         assert!(!response("invalid_request_error").is_retryable());
-        assert!(response("context_length_exceeded").is_context_overflow() && !response("context_length_exceeded").is_retryable());
-        assert!(api(503).is_retryable() && api(429).is_retryable() && !api(402).is_retryable() && !api(401).is_retryable());
-        let coded = |status, code: &str| Error::Api { status, code: Some(code.into()), message: String::new(), retry_after: None };
-        assert!(api(401).is_unauthorized() && !api(403).is_unauthorized() && !coded(402, "insufficient_balance").is_unauthorized());
+        assert!(
+            response("context_length_exceeded").is_context_overflow()
+                && !response("context_length_exceeded").is_retryable()
+        );
+        assert!(
+            api(503).is_retryable() && api(429).is_retryable() && !api(402).is_retryable() && !api(401).is_retryable()
+        );
+        let coded = |status, code: &str| Error::Api {
+            status,
+            code: Some(code.into()),
+            message: String::new(),
+            retry_after: None,
+        };
+        assert!(
+            api(401).is_unauthorized()
+                && !api(403).is_unauthorized()
+                && !coded(402, "insufficient_balance").is_unauthorized()
+        );
         assert!(Error::Io(std::io::ErrorKind::ConnectionReset.into()).is_retryable());
         assert!(!Error::Io(std::io::Error::other("attachment missing")).is_retryable());
         assert!(Error::Transport(Box::new(ureq::Error::HostNotFound)).is_retryable(), "offline");

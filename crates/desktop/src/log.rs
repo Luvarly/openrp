@@ -93,11 +93,16 @@ fn install_panic_hook() {
         let _ = writeln!(report, "{info}");
         let _ = writeln!(report, "\n{}\n", std::backtrace::Backtrace::force_capture());
         let path = Config::dir().map(|dir| dir.join(CRASH_FILE));
-        let saved = path.as_ref().is_ok_and(|path| path.parent().is_some_and(|dir| private_dir(dir).is_ok()) && append(path, &report).is_ok());
+        let saved = path.as_ref().is_ok_and(|path| {
+            path.parent().is_some_and(|dir| private_dir(dir).is_ok()) && append(path, &report).is_ok()
+        });
         let detail = match (&path, saved) {
             (Ok(path), true) => format!("Details were saved to {}.", path.display()),
             _ => "No crash report could be saved.".to_owned(),
         };
-        platform::alert("OpenRP crashed", &format!("OpenRP ran into a problem it could not recover from and has to close. {detail}"));
+        platform::alert(
+            "OpenRP crashed",
+            &format!("OpenRP ran into a problem it could not recover from and has to close. {detail}"),
+        );
     }));
 }

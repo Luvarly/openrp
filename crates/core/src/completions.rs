@@ -14,7 +14,12 @@ use crate::responses::{Completion, InputItem, ResponseRequest, StreamEvent, Tool
 const MAX_CALLS: usize = 64;
 
 /// Streams a reply from `client`'s provider; see [`Client::stream_response`].
-pub(crate) fn stream(client: &Client, request: &ResponseRequest<'_>, cancel: &AtomicBool, on_event: &mut dyn FnMut(StreamEvent)) -> Result<bool> {
+pub(crate) fn stream(
+    client: &Client,
+    request: &ResponseRequest<'_>,
+    cancel: &AtomicBool,
+    on_event: &mut dyn FnMut(StreamEvent),
+) -> Result<bool> {
     let response = client.post("/chat/completions", &body(request))?;
     let mut chunks = Chunks::default();
     let done = read_events(response, cancel, on_event, |event, on_event| chunks.data(&event.data, on_event))?;
@@ -29,21 +34,26 @@ pub(crate) fn stream(client: &Client, request: &ResponseRequest<'_>, cancel: &At
 /// The Chat Completions body for `request`: instructions become the system
 /// message, and a reply's calls join its assistant message.
 fn body(request: &ResponseRequest<'_>) -> Value {
-    let mut messages: Vec<Value> = request.instructions.map(|text| json!({ "role": "system", "content": text })).into_iter().collect();
+    let mut messages: Vec<Value> =
+        request.instructions.map(|text| json!({ "role": "system", "content": text })).into_iter().collect();
     for item in request.input {
         match item {
             InputItem::Message { role, text } => messages.push(json!({ "role": role, "content": text })),
             InputItem::ToolCall(call) => {
                 let call = json!({ "id": call.call_id, "type": "function", "function": { "name": call.name, "arguments": call.arguments } });
                 match messages.last_mut() {
-                    Some(last) if last["role"] == "assistant" => match last.get_mut("tool_calls").and_then(Value::as_array_mut) {
-                        Some(calls) => calls.push(call),
-                        None => last["tool_calls"] = json!([call]),
-                    },
+                    Some(last) if last["role"] == "assistant" => {
+                        match last.get_mut("tool_calls").and_then(Value::as_array_mut) {
+                            Some(calls) => calls.push(call),
+                            None => last["tool_calls"] = json!([call]),
+                        }
+                    }
                     _ => messages.push(json!({ "role": "assistant", "content": null, "tool_calls": [call] })),
                 }
             }
-            InputItem::ToolOutput { call_id, output } => messages.push(json!({ "role": "tool", "tool_call_id": call_id, "content": output })),
+            InputItem::ToolOutput { call_id, output } => {
+                messages.push(json!({ "role": "tool", "tool_call_id": call_id, "content": output }));
+            }
         }
     }
     let mut body = json!({ "model": request.model, "messages": messages, "stream": true, "stream_options": { "include_usage": true } });
@@ -88,7 +98,10 @@ impl Chunks {
         // OpenRouter reports failures mid-stream as a chunk holding `error`.
         if value.get("error").is_some() {
             let (code, message) = parse_error_body(data);
-            return Err(Error::Response { code, message: message.unwrap_or_else(|| "The provider reported an error.".into()) });
+            return Err(Error::Response {
+                code,
+                message: message.unwrap_or_else(|| "The provider reported an error.".into()),
+            });
         }
         if let Some(usage) = value.get("usage").filter(|u| u.is_object()) {
             let count = |path: &str| usage.pointer(path).and_then(Value::as_u64).unwrap_or(0);
@@ -172,7 +185,9 @@ mod tests {
 
     #[test]
     fn requests_translate() {
-        let call = |id: &str| InputItem::ToolCall(ToolCall { call_id: id.into(), name: "speak".into(), arguments: "{}".into() });
+        let call = |id: &str| {
+            InputItem::ToolCall(ToolCall { call_id: id.into(), name: "speak".into(), arguments: "{}".into() })
+        };
         let input = [
             InputItem::text(Role::User, "hi"),
             InputItem::text(Role::Assistant, "Hello."),
@@ -212,11 +227,15 @@ mod tests {
         let mut feed = |data: &str| chunks.data(data, &mut |e| events.push(e)).unwrap();
         feed(r#"{"choices":[{"delta":{"role":"assistant","reasoning":"Hm."}}]}"#);
         feed(r#"{"choices":[{"delta":{"content":"Hi"}}]}"#);
-        feed(r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"speak","arguments":"{\"a\""}}]}}]}"#);
+        feed(
+            r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"speak","arguments":"{\"a\""}}]}}]}"#,
+        );
         feed(r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":":1}"}}]}}]}"#);
         feed(r#"{"choices":[{"delta":{"tool_calls":[{"index":1,"function":{"name":"remember","arguments":"{}"}}]}}]}"#);
         feed(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#);
-        feed(r#"{"choices":[],"usage":{"prompt_tokens":9,"completion_tokens":4,"prompt_tokens_details":{"cached_tokens":5}}}"#);
+        feed(
+            r#"{"choices":[],"usage":{"prompt_tokens":9,"completion_tokens":4,"prompt_tokens_details":{"cached_tokens":5}}}"#,
+        );
         assert!(feed("[DONE]"));
         assert_eq!(events[..2], [StreamEvent::Reasoning("Hm.".into()), StreamEvent::Text("Hi".into())]);
         assert_eq!(events[2], StreamEvent::ToolCallStarted { index: 0, name: "speak".into() });
@@ -225,14 +244,18 @@ mod tests {
         let done = chunks.completion();
         assert_eq!(done.usage, Usage { input_tokens: 9, output_tokens: 4, cached_tokens: 5, cache_write_tokens: 0 });
         assert_eq!(done.incomplete.as_deref(), Some("max_output_tokens"));
-        assert_eq!(done.tool_calls[0], ToolCall { call_id: "c1".into(), name: "speak".into(), arguments: r#"{"a":1}"#.into() });
+        assert_eq!(
+            done.tool_calls[0],
+            ToolCall { call_id: "c1".into(), name: "speak".into(), arguments: r#"{"a":1}"#.into() }
+        );
         assert_eq!(done.tool_calls[1].call_id, "call_1", "a call without an id gets one");
     }
 
     #[test]
     fn hostile_chunks_are_bounded() {
         let mut chunks = Chunks::default();
-        let error = chunks.data(r#"{"error":{"code":"rate_limit_exceeded","message":"Slow down."}}"#, &mut |_| {}).unwrap_err();
+        let error =
+            chunks.data(r#"{"error":{"code":"rate_limit_exceeded","message":"Slow down."}}"#, &mut |_| {}).unwrap_err();
         assert!(error.is_retryable() && error.to_string() == "Slow down.");
         assert!(chunks.data("{", &mut |_| {}).is_err());
         let many: Vec<String> = (0..100).map(|i| format!(r#"{{"index":{i},"function":{{"name":"x"}}}}"#)).collect();
