@@ -11,8 +11,7 @@ pub struct Event {
 
 /// Accumulates SSE lines and yields complete events.
 ///
-/// SereChat names each event in the `event` field and leaves `type` out of
-/// the JSON payload, so both fields are kept. `id` and `retry` are ignored.
+/// `id` and `retry` are ignored.
 #[derive(Debug, Default)]
 pub struct Decoder {
     event: Event,

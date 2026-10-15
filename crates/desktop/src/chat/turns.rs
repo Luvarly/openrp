@@ -22,7 +22,7 @@
 
 use std::ops::Range;
 
-use serechat::{Role, StoredMessage};
+use openrp_core::{Role, StoredMessage};
 
 use super::stream::is_summary;
 use super::tools::{self, Part};
@@ -364,7 +364,7 @@ fn carry_cost(conversation: &mut Conversation, index: usize, cost: f64) {
 
 #[cfg(test)]
 mod tests {
-    use serechat::{Completion, StreamEvent, ToolCall};
+    use openrp_core::{Completion, StreamEvent, ToolCall};
 
     use super::*;
     use crate::chat::{Reasoning, SendJob};
@@ -377,7 +377,7 @@ mod tests {
         chat.send(&mut actions);
         let Some(Action::Send(job)) = actions.pop() else { panic!("not sent") };
         let call = ToolCall { call_id: format!("c{}", job.stream), name: super::super::tools::SPEAK.into(), arguments: args.into() };
-        let completion = Completion { tool_calls: vec![call], usage: serechat::Usage::new(10, 5), ..Completion::default() };
+        let completion = Completion { tool_calls: vec![call], usage: openrp_core::Usage::new(10, 5), ..Completion::default() };
         chat.stream_event(job.conversation, job.stream, StreamEvent::Completed(completion));
         chat.stream_end(job.conversation, job.stream, Ok(true), &mut Vec::new());
         job
@@ -386,7 +386,7 @@ mod tests {
     fn story() -> Chat {
         let mut chat = Chat::new(None, Reasoning::Auto, Vec::new());
         chat.play("w".into());
-        chat.current().player = Some(serechat::Player { name: "Gale".into(), ..serechat::Player::default() });
+        chat.current().player = Some(openrp_core::Player { name: "Gale".into(), ..openrp_core::Player::default() });
         chat
     }
 
@@ -445,7 +445,7 @@ mod tests {
     /// Completes `job` with a speak call of `args`.
     fn complete(chat: &mut Chat, job: &SendJob, args: &str) {
         let call = ToolCall { call_id: format!("c{}", job.stream), name: super::super::tools::SPEAK.into(), arguments: args.into() };
-        let completion = Completion { tool_calls: vec![call], usage: serechat::Usage::new(10, 5), ..Completion::default() };
+        let completion = Completion { tool_calls: vec![call], usage: openrp_core::Usage::new(10, 5), ..Completion::default() };
         chat.stream_event(job.conversation, job.stream, StreamEvent::Completed(completion));
         chat.stream_end(job.conversation, job.stream, Ok(true), &mut Vec::new());
     }
@@ -486,7 +486,7 @@ mod tests {
         let mut actions = Vec::new();
         chat.regenerate(&mut actions);
         let Some(Action::Send(job)) = actions.pop() else { panic!("not sent") };
-        let error = serechat::Error::Response { code: Some("invalid_request_error".into()), message: "bad".into() };
+        let error = openrp_core::Error::Response { code: Some("invalid_request_error".into()), message: "bad".into() };
         chat.stream_end(job.conversation, job.stream, Err(error), &mut Vec::new());
         assert_eq!(chat.current().swipes(), Some((0, 2, 3)), "two kept, the failure shown");
         chat.swipe_to(0, &mut Vec::new());
@@ -527,7 +527,7 @@ mod tests {
         assert!(reply.content.is_empty() && reply.tool_calls.len() == 1 && reply.change.is_some(), "deleting it still undoes what it did");
         assert!(matches!(&actions[..], [Action::SaveSession(_)]));
         let items = crate::chat::stream::input_items(&[prompt, reply.clone()]);
-        assert!(matches!(&items[1], serechat::InputItem::ToolCall(call) if call.arguments.contains("Hi. Changed.")), "the model sees the edit");
+        assert!(matches!(&items[1], openrp_core::InputItem::ToolCall(call) if call.arguments.contains("Hi. Changed.")), "the model sees the edit");
 
         // An emptied character leaves the reply; emptied entirely, it is removed.
         chat.edit_turn(1);

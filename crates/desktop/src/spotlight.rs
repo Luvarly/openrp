@@ -6,7 +6,7 @@
 //! description.
 
 use arboard::Clipboard;
-use serechat::{Model, SearchHit};
+use openrp_core::{Model, SearchHit};
 use winit::event::KeyEvent;
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::CursorIcon;
@@ -207,7 +207,7 @@ impl Spotlight {
                 themes.filter_map(|s| row(&format!("Theme: {}", s.label()), "Switch colour scheme", "Switch colour scheme".into(), Pick::Theme(s), -5)).collect(),
             );
         }
-        let now = serechat::unix_now();
+        let now = openrp_core::unix_now();
         group(
             "Sessions",
             cx.sessions
@@ -465,8 +465,8 @@ mod tests {
 
     /// A world and a character in the library.
     fn library() -> (Vec<Record>, Vec<Record>) {
-        let world = serechat::World { id: "w1".into(), name: "Panem".into(), description: "Twelve districts under the Capitol.".into(), ..Default::default() };
-        let hunter = serechat::Character { id: "c1".into(), name: "Katniss".into(), description: "A hunter from District 12.".into(), ..Default::default() };
+        let world = openrp_core::World { id: "w1".into(), name: "Panem".into(), description: "Twelve districts under the Capitol.".into(), ..Default::default() };
+        let hunter = openrp_core::Character { id: "c1".into(), name: "Katniss".into(), description: "A hunter from District 12.".into(), ..Default::default() };
         (vec![world.into()], vec![hunter.into()])
     }
 
@@ -546,11 +546,11 @@ mod tests {
     fn comments_find_library_records() {
         let (world, _) = library();
         let record = |id: &str, name: &str, comment: &str, description: &str| {
-            let c = serechat::Character { id: id.into(), name: name.into(), comment: comment.into(), description: description.into(), ..Default::default() };
+            let c = openrp_core::Character { id: id.into(), name: name.into(), comment: comment.into(), description: description.into(), ..Default::default() };
             Record::from(c)
         };
         let characters = [record("a", "Mira", "", "Sharp, quiet."), record("b", "Rex", "the sharp one", "")];
-        let gale = [Record::from(serechat::Persona { id: "p".into(), name: "Gale".into(), comment: "my hunter".into(), ..Default::default() })];
+        let gale = [Record::from(openrp_core::Persona { id: "p".into(), name: "Gale".into(), comment: "my hunter".into(), ..Default::default() })];
         let cx = Context { sessions: Vec::new(), worlds: &world, characters: &characters, personas: &gale, models: &[], model: "", scheme: Scheme::Dark };
         let rows = |query: &str| {
             let mut spotlight = Spotlight::default();

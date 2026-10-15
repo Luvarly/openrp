@@ -25,12 +25,10 @@ const FILE_NAME: &str = "config.toml";
 /// Persistent user settings.
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct Config {
-    /// `custom` when replies come from [`Config::base_url`]; SereChat otherwise.
-    pub provider: Option<String>,
-    /// API root of the custom OpenAI-compatible provider, e.g.
-    /// `https://openrouter.ai/api/v1`.
+    /// API root of the OpenAI-compatible provider, e.g.
+    /// `https://openrouter.ai/api/v1`; absent until the user enters one.
     pub base_url: Option<String>,
-    /// API key for the custom provider; absent when it needs none.
+    /// API key for the provider; absent when it needs none.
     pub api_key: Option<String>,
     /// Identifier of the model used for new messages.
     pub model: Option<String>,
@@ -58,7 +56,6 @@ impl std::fmt::Debug for Config {
     // Hand-written so the API key never ends up in logs.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Config")
-            .field("provider", &self.provider)
             .field("base_url", &self.base_url)
             .field("api_key", &self.api_key.as_ref().map(|_| "<redacted>"))
             .field("model", &self.model)
@@ -73,9 +70,9 @@ impl std::fmt::Debug for Config {
     }
 }
 
-/// The keys this build reads; see [`Config`]. `token` held the sign-in
-/// SereChat no longer takes (it now lives in the OS keychain): read so it is
-/// dropped, never written.
+/// The keys this build reads; see [`Config`]. `token` and `provider` belonged
+/// to the SereChat sign-in, which is gone: read so they are dropped, never
+/// written.
 const KEYS: [&str; 11] =
     ["token", "provider", "base_url", "api_key", "model", "reasoning", "theme", "reasoning_view", "utility_model", "window", "zoom"];
 
@@ -157,7 +154,6 @@ impl Config {
             };
             let value = parse_string(rest.trim()).map_err(|message| Error::Config { line: index + 1, message })?;
             match key {
-                "provider" => config.provider = Some(value),
                 "base_url" => config.base_url = Some(value),
                 "api_key" => config.api_key = Some(value),
                 "model" => config.model = Some(value),
@@ -179,7 +175,6 @@ impl Config {
     pub fn serialize(&self) -> String {
         let mut out = String::from("# OpenRP configuration.\n");
         let fields = [
-            ("provider", &self.provider),
             ("base_url", &self.base_url),
             ("api_key", &self.api_key),
             ("model", &self.model),
@@ -346,12 +341,11 @@ mod tests {
     #[test]
     fn round_trip_with_escapes() {
         let config = Config {
-            provider: Some("cus\"tom\\\n\u{1}é".into()),
             base_url: Some("https://openrouter.ai/api/v1".into()),
             api_key: Some("sk-or".into()),
             model: Some("claude-sonnet-5.5".into()),
             reasoning: Some("high".into()),
-            theme: Some("light".into()),
+            theme: Some("li\"ght\\\n\u{1}é".into()),
             reasoning_view: Some("expanded".into()),
             utility_model: Some("gemma".into()),
             window: Some("1200x800 maximized".into()),
@@ -370,9 +364,9 @@ mod tests {
         assert_eq!(config.theme.as_deref(), Some("raw\\n"));
         assert_eq!(config.model.as_deref(), Some("aé"));
 
-        // The old sign-in's token is dropped, not kept as an unknown line.
-        let old = Config::parse("token = \"apk_live_x\"\nmodel = \"m\"\n").unwrap();
-        assert!(old.extra.is_empty() && !old.serialize().contains("apk_live"));
+        // The old sign-in's lines are dropped, not kept as unknown ones.
+        let old = Config::parse("token = \"apk_live_x\"\nprovider = \"custom\"\nmodel = \"m\"\n").unwrap();
+        assert!(old.extra.is_empty() && old.serialize() == "# OpenRP configuration.\nmodel = \"m\"\n");
 
         // A newer build's settings survive an older one: kept and written back.
         let newer = "model = \"t\"\nfont_size = 14\nlist = [1, 2]\n[window]\ntheme = \"not ours\"\n";

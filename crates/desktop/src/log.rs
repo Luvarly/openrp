@@ -17,7 +17,7 @@ use std::path::Path;
 use std::sync::OnceLock;
 use std::sync::mpsc::{self, Sender};
 
-use serechat::{Config, unix_now};
+use openrp_core::{Config, unix_now};
 
 use crate::platform;
 

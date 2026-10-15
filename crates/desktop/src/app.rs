@@ -8,15 +8,15 @@
 
 use std::fmt;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, PoisonError, mpsc};
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, mpsc};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use arboard::Clipboard;
-use serechat::{
+use openrp_core::{
     Character, Client, Config, Error, InputItem, Library, LoreEntry, Model, Persona, Portraits, ResponseRequest, Role, SearchHit, Session,
-    SessionStore, SessionSummary, SignIn, StreamEvent, ToolCall, ToolChoice, ToolSpec, Usage, World,
+    SessionStore, SessionSummary, StreamEvent, ToolCall, ToolChoice, ToolSpec, Usage, World,
 };
 use winit::dpi::{LogicalPosition, LogicalSize};
 use winit::event::{ElementState, Ime, MouseButton, MouseScrollDelta, WindowEvent};
@@ -40,10 +40,8 @@ use crate::ui::{Ui, copy};
 /// Length of the cross-fade when the colour scheme changes.
 const THEME_FADE_SECS: f32 = 0.25;
 
-/// The keychain entry holding the SereChat sign-in's refresh token.
-const SIGN_IN: &str = "serechat";
-/// The config's `provider` when replies come from a custom provider.
-const CUSTOM: &str = "custom";
+/// Why the app went back to the connect screen on a `401`.
+const REJECTED: &str = "The provider refused the API key. Enter it again to keep using it.";
 /// Window size on first start, in logical pixels.
 const WINDOW_SIZE: (u32, u32) = (1200, 800);
 /// Smallest window size, in logical pixels.
@@ -60,20 +58,6 @@ const GPU_RETRY: Duration = Duration::from_secs(2);
 
 /// Results delivered from worker threads.
 pub enum WorkerEvent {
-    /// A sign-in is listening for the browser: its consent page can open.
-    SignInOpened {
-        /// The sign-in it is for (see `Login`).
-        attempt: u64,
-        /// The consent page.
-        url: String,
-    },
-    /// A sign-in finished.
-    SignedIn {
-        /// The sign-in it is for.
-        attempt: u64,
-        /// The signed-in client, or why there is none.
-        result: Result<Client, Error>,
-    },
     /// The model list arrived.
     Models {
         /// The connection it was asked for (see `App::connection`).
@@ -174,15 +158,6 @@ pub enum WorkerEvent {
 
 /// Something a screen wants done that needs app-level resources.
 pub enum Action {
-    /// Begin a browser sign-in to SereChat.
-    StartLogin {
-        /// Numbers it, for its results.
-        attempt: u64,
-        /// Raised to give up on it.
-        cancel: Arc<AtomicBool>,
-    },
-    /// Open a sign-in's consent page again.
-    OpenAuthPage(String),
     /// Stream a reply.
     Send(SendJob),
     /// Ask the character generator for someone.
@@ -260,20 +235,15 @@ pub enum Action {
     Copy(String),
     /// A reply finished or failed: flash the window if it is in the background.
     Attention,
-    /// Use a custom OpenAI-compatible provider from now on.
-    ConnectCustom {
+    /// Use an OpenAI-compatible provider from now on.
+    Connect {
         /// Its API root, e.g. `https://openrouter.ai/api/v1`.
         base_url: String,
         /// Its key; `None` keeps the saved one if it was for the same address.
         api_key: Option<String>,
     },
-    /// Use SereChat from now on, signing in first if needed.
-    UseSereChat,
-    /// Forget the custom provider's key (and stop using it).
+    /// Forget the provider's key and go back to the connect screen.
     ForgetKey,
-    /// Forget the credentials of the provider in use and move on: to
-    /// SereChat when still signed in to it, to sign-in otherwise.
-    SignOut,
 }
 
 /// Failure to start the app.
@@ -336,8 +306,6 @@ pub struct App {
     config: Config,
     /// The client for the provider in use.
     client: Client,
-    /// Signed in to SereChat: its client, whose clones share the tokens.
-    serechat: Option<Client>,
     /// Where sessions are saved; `None` when there is no home directory.
     sessions_dir: Option<PathBuf>,
     /// Where worlds, characters and personas are saved; `None` without a home directory.
@@ -400,15 +368,8 @@ impl App {
         let display = event_loop.owned_display_handle();
         let renderer = block_on(Renderer::new(Arc::clone(&window), display.clone())).map_err(StartupError::Gpu)?;
 
-        let serechat = match platform::secret(SIGN_IN) {
-            Ok(token) => token.map(|token| Client::signed_in(token, keychain(proxy.clone()))),
-            Err(e) => {
-                log::error(format!("cannot read the sign-in from the keychain: {e}"));
-                None
-            }
-        };
-        let client = client_for(&config, serechat.as_ref());
-        let signed_in = client.is_some();
+        let client = client_for(&config);
+        let connected = client.is_some();
         let sessions_dir =
             SessionStore::open().inspect_err(|e| log::error(format!("sessions will not be saved: {e}"))).ok().map(|store| store.dir().to_owned());
         let library = Library::worlds()
@@ -437,10 +398,9 @@ impl App {
             ui: Ui::default(),
             start: now,
             last_frame: now,
-            screen: Screen::Login(Login::new(None)),
+            screen: Screen::Login(Login::new(None, "")),
             config,
             client: client.unwrap_or_default(),
-            serechat,
             writer: Writer::start(sessions_dir.clone(), report),
             sessions_dir,
             library,
@@ -453,7 +413,7 @@ impl App {
             zoom,
         };
         app.ui.focused = true;
-        if signed_in {
+        if connected {
             app.enter_chat();
         }
         // Draw the first frame directly: hidden windows never receive
@@ -471,7 +431,7 @@ impl App {
         let mut chat = Chat::new(self.config.model.clone(), reasoning, sessions);
         chat.set_reasoning_view(ReasoningView::from_key(self.config.reasoning_view.as_deref()));
         chat.set_utility_model(self.config.utility_model.clone());
-        chat.set_provider(provider(&self.config, self.serechat.is_some()));
+        chat.set_provider(provider(&self.config));
         if unreadable > 0 {
             let stories = if unreadable == 1 { "1 saved story" } else { "Some saved stories" };
             chat.notify(format!("{stories} could not be read and are not listed. Their files are left untouched."), true);
@@ -548,62 +508,48 @@ impl App {
         self.save_config();
     }
 
-    /// Forgets the credentials of the provider in use (a custom one keeps
-    /// its address) and moves on; see [`Action::SignOut`]. `reason` says
-    /// why, when it was not the user's choice.
-    fn sign_out(&mut self, reason: Option<String>) {
-        let custom = provider(&self.config, self.serechat.is_some()).custom;
-        if custom {
-            self.config.provider = None;
-            self.config.api_key = None;
-        } else if let Some(client) = self.serechat.take() {
-            // Its keychain entry goes first, then the grant is revoked.
-            let spawned = std::thread::Builder::new().name("openrp-sign-out".into()).spawn(move || {
-                if let Err(e) = client.sign_out() {
-                    log::error(format!("could not revoke the sign-in: {e}"));
-                }
-            });
-            if let Err(e) = spawned {
-                log::error(format!("cannot spawn the sign-out thread: {e}"));
-            }
+    /// Forgets the provider's key and address and goes back to the connect
+    /// screen, which offers the address again; see [`Action::ForgetKey`].
+    /// `reason` says why, when it was not the user's choice.
+    fn forget_key(&mut self, reason: Option<String>) {
+        self.config.api_key = None;
+        let base_url = self.config.base_url.take().unwrap_or_default();
+        self.save_config();
+        self.connection += 1;
+        self.models_retry = None;
+        if let Screen::Chat(chat) = &mut self.screen {
+            chat.cancel_all();
         }
-        self.connect(reason.clone());
-        // Sign-in offers the custom provider's address again.
-        if custom && let (Screen::Login(_), Some(url)) = (&self.screen, &self.config.base_url) {
-            self.screen = Screen::Login(Login::custom(reason, url));
-        }
+        self.client = Client::default();
+        self.screen = Screen::Login(Login::new(reason, &base_url));
     }
 
-    /// Saves the config and talks to the provider it names from now on: the
-    /// chat lists that provider's models, or sign-in comes up when there is
-    /// nothing to sign in with. `reason` is told to the user.
-    fn connect(&mut self, reason: Option<String>) {
+    /// Saves `base_url` and `api_key` (`None` keeps the saved key if it was
+    /// for the same address) and talks to that provider from now on: the
+    /// chat lists its models.
+    fn connect(&mut self, base_url: String, api_key: Option<String>) {
+        // A saved key only ever goes to the address it was saved for.
+        let saved = self.config.api_key.take().filter(|_| self.config.base_url.as_deref() == Some(base_url.as_str()));
+        self.config.api_key = api_key.or(saved);
+        self.client = Client::new(&base_url, self.config.api_key.clone());
+        self.config.base_url = Some(base_url);
         self.save_config();
         self.connection += 1;
         self.models_failures = 0;
-        let Some(client) = client_for(&self.config, self.serechat.as_ref()) else {
-            if let Screen::Chat(chat) = &mut self.screen {
-                chat.cancel_all();
+        let chat = match &mut self.screen {
+            Screen::Chat(chat) => chat,
+            Screen::Login(login) => {
+                let problem = login.problem.take();
+                self.enter_chat();
+                if let (Some(problem), Screen::Chat(chat)) = (problem, &mut self.screen) {
+                    chat.notify(problem, false);
+                }
+                return;
             }
-            self.client = Client::new();
-            self.models_retry = None;
-            self.screen = Screen::Login(Login::new(reason));
-            return;
-        };
-        self.client = client;
-        let Screen::Chat(chat) = &mut self.screen else {
-            self.enter_chat();
-            if let (Some(reason), Screen::Chat(chat)) = (reason, &mut self.screen) {
-                chat.notify(reason, false);
-            }
-            return;
         };
         // The old provider's models mean nothing to the new one.
         chat.set_models(Vec::new());
-        chat.set_provider(provider(&self.config, self.serechat.is_some()));
-        if let Some(reason) = reason {
-            chat.notify(reason, false);
-        }
+        chat.set_provider(provider(&self.config));
         self.load_models();
     }
 
@@ -618,16 +564,6 @@ impl App {
             chat.notify("Wait for the reply to finish, or stop it, before changing the provider.".into(), false);
         }
         busy
-    }
-
-    /// Why the provider stopped taking requests, for the user.
-    fn rejected(&self) -> String {
-        let text = if provider(&self.config, self.serechat.is_some()).custom {
-            "The provider refused the API key. Enter it again to keep using it."
-        } else {
-            "Your session has expired. Please sign in again."
-        };
-        text.to_owned()
     }
 
     /// Physical pixels per logical pixel: the display's scale, zoomed.
@@ -734,26 +670,13 @@ impl App {
         let mut actions = Vec::new();
         match (event, &mut self.screen) {
             (WorkerEvent::Thumbnail(key, pixels), _) => self.images.insert(key, pixels),
-            (WorkerEvent::SignInOpened { attempt, url }, Screen::Login(login)) => {
-                if login.opened(attempt, &url) {
-                    self.open_auth_page(&url);
-                }
-            }
-            (WorkerEvent::SignedIn { attempt, result }, Screen::Login(login)) => {
-                if let Some(client) = login.signed_in(attempt, result) {
-                    let problem = login.problem.take();
-                    self.serechat = Some(client);
-                    self.config.provider = None;
-                    self.connect(problem);
-                }
-            }
             // Asked of a provider no longer in use.
             (WorkerEvent::Models { connection, .. }, _) if connection != self.connection => return,
             (WorkerEvent::Models { result: Ok(models), .. }, Screen::Chat(chat)) => {
                 (self.models_retry, self.models_failures) = (None, 0);
                 chat.set_models(models);
             }
-            (WorkerEvent::Models { result: Err(e), .. }, Screen::Chat(_)) if e.is_unauthorized() => self.sign_out(Some(self.rejected())),
+            (WorkerEvent::Models { result: Err(e), .. }, Screen::Chat(_)) if e.is_unauthorized() => self.forget_key(Some(REJECTED.to_owned())),
             (WorkerEvent::Models { result: Err(e), .. }, Screen::Chat(chat)) => {
                 log::error(format!("could not load models: {e}"));
                 chat.models_failed(format!("Could not load the models: {e}"));
@@ -770,7 +693,7 @@ impl App {
             (WorkerEvent::StreamEnded { conversation, stream, result }, Screen::Chat(chat)) => {
                 if chat.stream_end(conversation, stream, result, &mut actions) {
                     self.apply(actions);
-                    self.sign_out(Some(self.rejected()));
+                    self.forget_key(Some(REJECTED.to_owned()));
                     self.window.request_redraw();
                     return;
                 }
@@ -804,17 +727,6 @@ impl App {
 
     fn run(&mut self, action: Action) {
         match action {
-            Action::StartLogin { attempt, cancel } => {
-                let save = keychain(self.proxy.clone());
-                self.spawn(move |_, proxy| {
-                    let result = SignIn::start().and_then(|sign_in| {
-                        let _ = proxy.send_event(WorkerEvent::SignInOpened { attempt, url: sign_in.url().to_owned() });
-                        sign_in.finish(&cancel, save)
-                    });
-                    WorkerEvent::SignedIn { attempt, result }
-                });
-            }
-            Action::OpenAuthPage(url) => self.open_auth_page(&url),
             Action::Send(job) => self.spawn(move |client, proxy| {
                 let (conversation, stream) = (job.conversation, job.stream);
                 let input = job.input();
@@ -955,7 +867,7 @@ impl App {
             }
             Action::ImportLore => self.spawn(|_, _| {
                 let picked = platform::pick_files("Import a lorebook", ("Lorebooks and cards", &["json", "png"]), false);
-                let read = |path: &std::path::Path| read_file(path).and_then(|bytes| serechat::read_lorebook(&bytes).map_err(|e| e.to_string()));
+                let read = |path: &std::path::Path| read_file(path).and_then(|bytes| openrp_core::read_lorebook(&bytes).map_err(|e| e.to_string()));
                 WorkerEvent::LoreImported(match picked {
                     Ok(paths) => paths.first().map_or(Ok(Vec::new()), |path| read(path)),
                     Err(e) => Err(format!("Could not open the file picker: {e}")),
@@ -966,8 +878,8 @@ impl App {
             Action::ExportCard { character, portrait } => self.spawn(move |_, _| {
                 let kind = if portrait.is_some() { "png" } else { "json" };
                 let card = || match &portrait {
-                    Some(path) => image::png_bytes(path).and_then(|png| serechat::embed_card(&png, &character).map_err(|e| e.to_string())),
-                    None => Ok(serechat::card_json(&character).into_bytes()),
+                    Some(path) => image::png_bytes(path).and_then(|png| openrp_core::embed_card(&png, &character).map_err(|e| e.to_string())),
+                    None => Ok(openrp_core::card_json(&character).into_bytes()),
                 };
                 export("Export character card", &character.name, ("Character card", &[kind]), card)
             }),
@@ -1009,46 +921,15 @@ impl App {
             Action::Copy(text) => copy(&mut self.clipboard, &text),
             Action::Attention if !self.ui.focused => self.window.request_user_attention(Some(UserAttentionType::Informational)),
             Action::Attention => {}
-            Action::ConnectCustom { base_url, api_key } => {
-                if self.refuse_switch() {
-                    return;
-                }
-                // A saved key only ever goes to the address it was saved for.
-                let saved = self.config.api_key.take().filter(|_| self.config.base_url.as_deref() == Some(base_url.as_str()));
-                self.config.api_key = api_key.or(saved);
-                self.config.provider = Some(CUSTOM.to_owned());
-                self.config.base_url = Some(base_url);
-                self.connect(None);
-            }
-            Action::UseSereChat => {
+            Action::Connect { base_url, api_key } => {
                 if !self.refuse_switch() {
-                    self.config.provider = None;
-                    self.connect(None);
-                }
-            }
-            Action::ForgetKey if provider(&self.config, self.serechat.is_some()).custom => {
-                if !self.refuse_switch() {
-                    self.sign_out(None);
+                    self.connect(base_url, api_key);
                 }
             }
             Action::ForgetKey => {
-                self.config.api_key = None;
-                self.save_config();
-                if let Screen::Chat(chat) = &mut self.screen {
-                    chat.set_provider(provider(&self.config, self.serechat.is_some()));
+                if !self.refuse_switch() {
+                    self.forget_key(None);
                 }
-            }
-            Action::SignOut => self.sign_out(None),
-        }
-    }
-
-    /// Opens a sign-in's consent page in the browser, or copies its link.
-    fn open_auth_page(&mut self, url: &str) {
-        if let Err(e) = platform::open_url(url) {
-            log::error(format!("cannot open browser: {e}"));
-            copy(&mut self.clipboard, url);
-            if let Screen::Login(login) = &mut self.screen {
-                login.browser_failed();
             }
         }
     }
@@ -1247,44 +1128,15 @@ fn zoomed(zoom: u16, key: &Key) -> Option<u16> {
     Some(zoom.clamp(ZOOM.0, ZOOM.1))
 }
 
-/// The client for the provider `config` names, or `None` when there is
-/// nothing to sign in with: no custom provider in use and not signed in to
-/// SereChat (`serechat`).
-fn client_for(config: &Config, serechat: Option<&Client>) -> Option<Client> {
-    match (config.provider.as_deref(), &config.base_url) {
-        (Some(CUSTOM), Some(url)) => Some(Client::custom(url, config.api_key.clone())),
-        _ => serechat.cloned(),
-    }
+/// The client for the provider `config` names, or `None` when none was
+/// entered yet.
+fn client_for(config: &Config) -> Option<Client> {
+    config.base_url.as_deref().map(|url| Client::new(url, config.api_key.clone()))
 }
 
-/// Keeps SereChat's refresh token in the OS keychain (`None`: removes it),
-/// for [`Client::signed_in`]. Runs on whichever worker refreshed; a failure
-/// is logged and told once.
-fn keychain(proxy: EventLoopProxy<WorkerEvent>) -> impl Fn(Option<&str>) + Send + Sync + 'static {
-    let (proxy, told) = (Mutex::new(proxy), AtomicBool::new(false));
-    move |token| {
-        let Err(e) = platform::keep_secret(SIGN_IN, token) else { return };
-        log::error(format!("cannot keep the sign-in in the keychain: {e}"));
-        if !told.swap(true, Ordering::Relaxed) {
-            let text = if token.is_some() {
-                format!("Could not save your sign-in in the system keychain, so you will have to sign in again next time: {e}")
-            } else {
-                format!("Could not remove your sign-in from the system keychain: {e}")
-            };
-            let _ = proxy.lock().unwrap_or_else(PoisonError::into_inner).send_event(WorkerEvent::Problem { text, folder: false });
-        }
-    }
-}
-
-/// What the settings page shows of the providers in `config`, and whether
-/// SereChat is `signed_in`.
-fn provider(config: &Config, signed_in: bool) -> Provider {
-    Provider {
-        custom: config.provider.as_deref() == Some(CUSTOM) && config.base_url.is_some(),
-        signed_in,
-        base_url: config.base_url.clone().unwrap_or_default(),
-        has_key: config.api_key.is_some(),
-    }
+/// What the settings page shows of the provider in `config`.
+fn provider(config: &Config) -> Provider {
+    Provider { base_url: config.base_url.clone().unwrap_or_default(), has_key: config.api_key.is_some() }
 }
 
 /// Logical size and maximized state of the window from the config's
@@ -1468,7 +1320,7 @@ fn import_cards(portraits: &Portraits) -> WorkerEvent {
     let (mut characters, mut errors) = (Vec::new(), Vec::new());
     for path in paths {
         let read = read_file(&path).and_then(|bytes| {
-            let mut character = serechat::read_card(&bytes).map_err(|e| e.to_string())?;
+            let mut character = openrp_core::read_card(&bytes).map_err(|e| e.to_string())?;
             if bytes.starts_with(b"\x89PNG") {
                 character.portrait = portraits.add(&bytes).map_err(|e| e.to_string())?;
             }
@@ -1580,15 +1432,10 @@ mod tests {
     }
 
     #[test]
-    fn custom_provider_needs_an_address() {
-        let config = Config { provider: Some(CUSTOM.into()), ..Config::default() };
-        assert!(client_for(&config, None).is_none() && !provider(&config, false).custom, "nothing to talk to");
-        let config = Config { base_url: Some("http://localhost:11434/v1".into()), ..config };
-        assert!(client_for(&config, None).is_some() && provider(&config, false).custom, "a local server needs no key");
-        let config = Config { provider: None, ..config };
-        let serechat = Client::signed_in("refresh".into(), |_| {});
-        assert!(client_for(&config, Some(&serechat)).is_some() && !provider(&config, true).custom);
-        assert!(client_for(&config, None).is_none(), "signed out of SereChat");
+    fn provider_needs_an_address() {
+        assert!(client_for(&Config::default()).is_none(), "nothing to talk to");
+        let config = Config { base_url: Some("http://localhost:11434/v1".into()), ..Config::default() };
+        assert!(client_for(&config).is_some(), "a local server needs no key");
     }
 
     #[test]

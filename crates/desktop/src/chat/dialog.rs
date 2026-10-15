@@ -8,7 +8,7 @@
 //! Everything it changes belongs to the story only.
 
 use arboard::Clipboard;
-use serechat::{CastMember, Error, Player, ToolCall, new_id, rename};
+use openrp_core::{CastMember, Error, Player, ToolCall, new_id, rename};
 use winit::event::KeyEvent;
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::CursorIcon;
@@ -833,8 +833,8 @@ mod tests {
     #[test]
     fn personas_are_played_and_saved() {
         let mut chat = Chat::new(None, Reasoning::Auto, Vec::new());
-        let gale = serechat::Persona { id: "g".into(), name: "Gale".into(), description: "A hunter.".into(), portrait: "g.png".into(), favorite: true, ..Default::default() };
-        chat.library_loaded(Vec::new(), Vec::new(), vec![gale], serechat::Portraits::at("p".into()));
+        let gale = openrp_core::Persona { id: "g".into(), name: "Gale".into(), description: "A hunter.".into(), portrait: "g.png".into(), favorite: true, ..Default::default() };
+        chat.library_loaded(Vec::new(), Vec::new(), vec![gale], openrp_core::Portraits::at("p".into()));
 
         // A new story asks who you are with the starred persona filled in.
         chat.play("w".into());
@@ -847,8 +847,8 @@ mod tests {
         assert_eq!((player.name.as_str(), player.portrait.as_str()), ("Gale", "g.png"), "begun as the persona, portrait and all");
 
         // Past six, the rest are searched in a menu.
-        let more: Vec<serechat::Persona> = (0..8).map(|i| serechat::Persona { id: format!("p{i}"), name: format!("P{i}"), ..Default::default() }).collect();
-        chat.library_loaded(Vec::new(), Vec::new(), more, serechat::Portraits::at("p".into()));
+        let more: Vec<openrp_core::Persona> = (0..8).map(|i| openrp_core::Persona { id: format!("p{i}"), name: format!("P{i}"), ..Default::default() }).collect();
+        chat.library_loaded(Vec::new(), Vec::new(), more, openrp_core::Portraits::at("p".into()));
         chat.edit_player();
         let rue = chat.persona_choices().iter().position(|r| r.name == "P7").unwrap();
         chat.play_as(rue);

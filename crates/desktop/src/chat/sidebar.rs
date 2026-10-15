@@ -1,6 +1,6 @@
 //! The sidebar: worlds, characters and personas, every saved session, and settings.
 
-use serechat::unix_now;
+use openrp_core::unix_now;
 use winit::window::CursorIcon;
 
 use super::{Chat, Menu, PRIMARY_KEY, Page, ago};

@@ -13,7 +13,7 @@
 //! message of the first character in the scene whose library character has
 //! one, the others to swipe to (see [`Chat::greet`]).
 
-use serechat::{CastMember, StoredMessage, macros};
+use openrp_core::{CastMember, StoredMessage, macros};
 use winit::window::CursorIcon;
 
 use super::{Chat, Entry, Load, Menu, MenuItem, Page, tools};
@@ -392,7 +392,7 @@ fn cast_member(character: &Record) -> CastMember {
 
 #[cfg(test)]
 mod tests {
-    use serechat::{Character, Portraits, World};
+    use openrp_core::{Character, Portraits, World};
 
     use super::*;
     use crate::chat::Reasoning;
@@ -408,7 +408,7 @@ mod tests {
 
         chat.play("w".into());
         assert!(chat.page == Page::Chat && !chat.current().playable(), "first: who does the user play");
-        chat.current().player = Some(serechat::Player { name: "Gale".into(), description: "A hunter too.".into(), ..serechat::Player::default() });
+        chat.current().player = Some(openrp_core::Player { name: "Gale".into(), description: "A hunter too.".into(), ..openrp_core::Player::default() });
         assert!(chat.current().playable());
         let mut actions = Vec::new();
         chat.library_menu_picked(0, &mut actions);
@@ -464,7 +464,7 @@ mod tests {
         assert!(chat.current().entries.is_empty(), "not before the user says who they are");
 
         // Once they do, she opens it; her other greeting can be swiped to.
-        chat.current().player = Some(serechat::Player { name: "Gale".into(), ..serechat::Player::default() });
+        chat.current().player = Some(openrp_core::Player { name: "Gale".into(), ..openrp_core::Player::default() });
         chat.greet(&mut actions);
         let said = |chat: &mut Chat| {
             let entry = chat.current().entries.first_mut().unwrap();
@@ -487,17 +487,17 @@ mod tests {
         assert!(chat.current().greetings().is_none());
         let Some(Action::Send(job)) = actions.pop() else { panic!("not sent") };
         assert!(job.instructions.contains("### How Mira talks"));
-        assert!(matches!(&job.input()[1], serechat::InputItem::ToolCall(call) if call.arguments.contains("Hi, Gale.")));
+        assert!(matches!(&job.input()[1], openrp_core::InputItem::ToolCall(call) if call.arguments.contains("Hi, Gale.")));
     }
 
     #[test]
     fn stories_are_exported_once_read() {
-        let session = serechat::Session {
+        let session = openrp_core::Session {
             id: "s".into(),
             title: "Night".into(),
             world: Some("w".into()),
-            messages: vec![serechat::StoredMessage::new(serechat::Role::User, "Hi.".into())],
-            ..serechat::Session::default()
+            messages: vec![openrp_core::StoredMessage::new(openrp_core::Role::User, "Hi.".into())],
+            ..openrp_core::Session::default()
         };
         let mut chat = Chat::new(None, Reasoning::Auto, vec![session.summary()]);
         let world = World { id: "w".into(), name: "Ard".into(), ..World::default() };
@@ -536,12 +536,12 @@ mod tests {
         let mut chat = Chat::new(None, Reasoning::Auto, Vec::new());
         for world in ["a", "b"] {
             chat.play(world.into());
-            chat.current().player = Some(serechat::Player { name: "Gale".into(), ..serechat::Player::default() });
+            chat.current().player = Some(openrp_core::Player { name: "Gale".into(), ..openrp_core::Player::default() });
             chat.composer.insert("Hello.");
             chat.send(&mut Vec::new());
         }
         // A world's page lists its stories.
-        let world = |id: &str| serechat::World { id: id.into(), name: id.into(), ..serechat::World::default() };
+        let world = |id: &str| openrp_core::World { id: id.into(), name: id.into(), ..openrp_core::World::default() };
         chat.library_loaded(vec![world("a"), world("b")], Vec::new(), Vec::new(), Portraits::at("portraits".into()));
         assert!(chat.world_stories().is_empty(), "no world open");
         chat.library.open_form(Kind::World, "a");

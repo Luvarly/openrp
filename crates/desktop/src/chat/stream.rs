@@ -33,7 +33,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use serechat::{
+use openrp_core::{
     CastMember, Completion, Error, InputItem, LoreEntry, Player, Role, StoredMessage, StoryChange, StreamEvent, ToolCall, ToolChoice, ToolResult, Usage,
     macros, new_id, unix_now,
 };
@@ -1167,7 +1167,7 @@ mod tests {
     #[test]
     fn tool_calls_go_back_with_their_results() {
         let mut reply = StoredMessage::new(Role::Assistant, String::new());
-        let call = serechat::ToolCall { call_id: "c".into(), name: tools::SPEAK.into(), arguments: "{}".into() };
+        let call = openrp_core::ToolCall { call_id: "c".into(), name: tools::SPEAK.into(), arguments: "{}".into() };
         reply.tool_calls.push(ToolResult { call, output: "Spoken.".into() });
         let items = input_items(&[StoredMessage::new(Role::User, "Hi".into()), reply]);
         assert_eq!(items.len(), 3, "a reply of only calls sends no empty text");

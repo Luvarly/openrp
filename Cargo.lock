@@ -1287,13 +1287,22 @@ version = "0.1.0"
 dependencies = [
  "arboard",
  "bytemuck",
+ "openrp-core",
  "png",
  "serde_json",
- "serechat",
  "ttf-parser",
  "wgpu",
  "winit",
  "zune-jpeg",
+]
+
+[[package]]
+name = "openrp-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "ureq",
 ]
 
 [[package]]
@@ -1727,16 +1736,6 @@ dependencies = [
  "serde",
  "serde_core",
  "zmij",
-]
-
-[[package]]
-name = "serechat"
-version = "0.1.0"
-dependencies = [
- "ring",
- "serde",
- "serde_json",
- "ureq",
 ]
 
 [[package]]

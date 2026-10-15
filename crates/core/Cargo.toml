@@ -1,6 +1,6 @@
 [package]
-name = "serechat"
-description = "SereChat API client: OAuth sign-in, Responses API streaming and user config."
+name = "openrp-core"
+description = "OpenRP's model client (OpenAI-compatible Chat Completions streaming) and local data."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,6 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-ring.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 ureq.workspace = true

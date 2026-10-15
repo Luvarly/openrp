@@ -409,7 +409,7 @@ impl Chat {
 }
 
 /// A model's name in a menu: its name, or its id without one.
-fn model_label(model: &serechat::Model) -> &str {
+fn model_label(model: &openrp_core::Model) -> &str {
     if model.name.is_empty() { &model.id } else { &model.name }
 }
 
@@ -431,12 +431,12 @@ mod tests {
 
     #[test]
     fn the_cast_is_picked_from_a_search() {
-        let character = |id: &str, name: &str, comment: &str| serechat::Character { id: id.into(), name: name.into(), comment: comment.into(), ..Default::default() };
+        let character = |id: &str, name: &str, comment: &str| openrp_core::Character { id: id.into(), name: name.into(), comment: comment.into(), ..Default::default() };
         let mut chat = Chat::new(None, Reasoning::Auto, Vec::new());
         let library = vec![character("a", "Mira", "barkeep v1"), character("b", "Mira", "barkeep v2, darker"), character("c", "Rex", "")];
-        chat.library_loaded(Vec::new(), library, Vec::new(), serechat::Portraits::at("p".into()));
+        chat.library_loaded(Vec::new(), library, Vec::new(), openrp_core::Portraits::at("p".into()));
         chat.play("w".into());
-        chat.current().player = Some(serechat::Player { name: "Gale".into(), ..Default::default() });
+        chat.current().player = Some(openrp_core::Player { name: "Gale".into(), ..Default::default() });
         chat.menu = Some(Menu::CastLibrary);
         chat.menu_query.insert("mira DARKER");
         let content = chat.menu_content(Menu::CastLibrary, [Rect::default(); 4]);

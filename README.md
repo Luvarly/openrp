@@ -1,7 +1,7 @@
 # OpenRP
 
-A native, GPU-rendered roleplay AI engine by [SereChat](https://serechat.com), built on its API.
-It runs on Windows, macOS and Linux, and it is pure Rust: no web view and no UI framework.
+A native, GPU-rendered roleplay AI engine for any OpenAI-compatible API (OpenRouter, Inworld,
+OpenAI, Ollama, ...). It runs on Windows, macOS and Linux, and it is pure Rust: no web view and no UI framework.
 
 ```sh
 cargo run --release -p openrp     # binary name: openrp
@@ -11,8 +11,8 @@ cargo clippy --workspace --all-targets
 
 ## What it does
 
-- **Chat** with any SereChat model, with prices shown in the model picker and per-reply token
-  and cost captions. Reasoning effort is selectable. While a thinking model works, the reply
+- **Chat** with any model your provider offers, with per-reply token captions (and prices and
+  costs, for a provider that lists them). Reasoning effort is selectable. While a thinking model works, the reply
   shows "Thinking for 4s"; afterwards "Thought for 12s" expands to its reasoning. Settings
   choose whether reasoning is hidden, collapsed or expanded.
 - **Markdown replies**: headings, lists and task lists, quotes, tables, links, inline code, and
@@ -153,12 +153,11 @@ cargo clippy --workspace --all-targets
 - **Settings**, in tabs: Appearance (Dark, One Dark and Light schemes, reasoning display),
   Models (a **background model** for memory reviews, summaries and generated characters: a
   cheaper one saves money, and summaries stay on the story's model when it holds less
-  context), Usage totals, and Provider (switch between SereChat and a custom provider, edit or
-  forget its key, sign out; the data folder).
-- **Custom providers**: under the sign-in button, **Use a custom provider** takes any
-  OpenAI-compatible API (OpenRouter, Inworld, OpenAI, Ollama, ...): its base URL and key. It is
-  spoken to with Chat Completions; the model must support tool calls. Its models list no
-  prices, so costs are hidden while it is in use.
+  context), Usage totals, and Provider (edit the base URL and key, or forget the key; the data
+  folder).
+- **Any OpenAI-compatible provider**: until one is set, the app asks for its base URL and API
+  key (left empty for a local server that needs none), with presets for OpenRouter, Inworld,
+  OpenAI and Ollama. It is spoken to with Chat Completions; the model must support tool calls.
 - **The window remembers** its size and whether it was maximized.
 - **Zoom** (Ctrl/Cmd + and -, Ctrl/Cmd+0 resets): everything grows or shrinks, from 50% to 200%,
   in steps of 10%; kept for the next start.
@@ -172,7 +171,7 @@ cargo clippy --workspace --all-targets
 
 | Crate             | Purpose                                                                          |
 |-------------------|----------------------------------------------------------------------------------|
-| `crates/serechat` | API client: sign-in, models, streaming Responses API with tools (Chat Completions for custom providers), config, sessions, worlds and characters, character cards and lorebooks (`card.rs`) |
+| `crates/core` (`openrp-core`) | API client: models and streaming replies with tools (Chat Completions, for any OpenAI-compatible provider), config, sessions, worlds and characters, character cards and lorebooks (`card.rs`) |
 | `crates/desktop`  | The app (`openrp`): winit window, wgpu renderer, text engine, immediate-mode UI  |
 
 `crates/desktop/src`:
@@ -222,22 +221,12 @@ a `v*` tag attaches release builds to a GitHub release: `openrp.exe` (icon embed
 for macOS, and for Linux the binary with `openrp.desktop`, its icon and `install.sh` (installs
 all three for the current user). The packaging files are in `packaging/`.
 
-## Sign-in and storage
+## Provider and storage
 
-The first time the app starts, it signs in to SereChat with OAuth 2.1 (authorization code
-with PKCE, as RFC 8252 has native apps do it): the app listens on a free port at
-`http://127.0.0.1:{port}/callback`, the system browser opens SereChat's consent page, and once
-the user allows OpenRP (scope `chat`) the browser comes back to the app by itself. Or it
-connects to a custom provider instead: a base URL and an API key.
+The first time the app starts, it asks for the provider's base URL and API key. Everything
+lives in `~/.openrp/`:
 
-The access token lasts an hour and is refreshed before it runs out (or when the API answers
-`401`), in one place, so two refreshes never race; refresh tokens rotate, and each new one goes
-straight to the OS keychain: Credential Manager on Windows, the login keychain on macOS (through
-`security`), and the Secret Service on Linux (through `secret-tool`, from `libsecret-tools` on
-Debian and Ubuntu; without it, the sign-in lasts until the app closes). Signing out revokes
-the grant. Everything else lives in `~/.openrp/`:
-
-- `config.toml`: the provider in use and the custom provider's base URL and key, model, background model, reasoning effort and display, colour scheme, the window's
+- `config.toml`: the provider's base URL and key, model, background model, reasoning effort and display, colour scheme, the window's
   size and the zoom. Lines a newer version added are kept as they are.
 - `sessions/<id>.json`: one file per story, with its world, your character, its cast (copies),
   its scene, memories and author's note, each reply's tool calls, and each reply's tokens and cost at the
@@ -257,9 +246,8 @@ upgraded as they are read, and one from a newer version is shown but never saved
 story from a newer version is listed but does not open).
 
 On Unix these files have mode `0600`, and they are written atomically, through a temporary file
-unique to each write. Signing out (or SereChat refusing the sign-in: a `401` after a refresh, a refresh token
-unused for 60 days, or a missing scope) removes the sign-in, or the custom provider's key,
-but keeps sessions; signed in to the other provider, the app carries on with it.
+unique to each write. Forgetting the key (or the provider refusing it with a `401`) removes the
+key and returns to the connect screen, which offers the same address again; sessions are kept.
 A saved key is only ever sent to the address it was saved for.
 
 ## Known limits (deliberate, for now)

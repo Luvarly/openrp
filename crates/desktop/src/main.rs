@@ -108,7 +108,7 @@ fn fail(message: &str) -> ExitCode {
 fn main() -> ExitCode {
     log::init();
     // Two copies would write the same files over each other.
-    let _lock = match serechat::lock_instance(LOCK_FILE) {
+    let _lock = match openrp_core::lock_instance(LOCK_FILE) {
         Ok(Some(lock)) => Some(lock),
         Ok(None) => return fail("OpenRP is already running. Switch to its window, or close it before starting it again."),
         Err(e) => {

@@ -22,7 +22,7 @@
 //!
 //! Portraits are never deleted from here: stories copy them from the
 //! library, so a sweep at startup removes the ones nothing uses any more
-//! (see `serechat::Portraits::collect_garbage`).
+//! (see `openrp_core::Portraits::collect_garbage`).
 //!
 //! Nothing typed is lost by looking elsewhere: a form with unsaved changes
 //! is kept as a draft (one per page) and reopens with the page. Going back
@@ -34,7 +34,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use arboard::Clipboard;
-use serechat::{Character, LoreEntry, Persona, Portraits, World, new_id, unix_now};
+use openrp_core::{Character, LoreEntry, Persona, Portraits, World, new_id, unix_now};
 use winit::event::KeyEvent;
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::CursorIcon;
@@ -899,7 +899,7 @@ impl LibraryView {
     /// Stores a story's cast member as library character `id`: updates the
     /// one it was cast from (keeping its greetings, tags and star), or adds
     /// a new one.
-    pub fn store_character(&mut self, member: &serechat::CastMember, actions: &mut Vec<Action>) {
+    pub fn store_character(&mut self, member: &openrp_core::CastMember, actions: &mut Vec<Action>) {
         let existing = self.get(Kind::Character, &member.id).cloned();
         // One saved by a newer version is never saved over.
         if existing.as_ref().is_some_and(|r| r.locked) {
@@ -1909,7 +1909,7 @@ mod tests {
 
         // Storing a cast member keeps the library's greetings and tags.
         let id = saved.id.clone();
-        let member = serechat::CastMember { id: id.clone(), name: "Nia".into(), examples: "Hm.".into(), ..serechat::CastMember::default() };
+        let member = openrp_core::CastMember { id: id.clone(), name: "Nia".into(), examples: "Hm.".into(), ..openrp_core::CastMember::default() };
         view.store_character(&member, &mut actions);
         let stored = view.get(Kind::Character, &id).unwrap();
         assert!(stored.name == "Nia" && stored.greetings == ["Hello."] && stored.examples == "Hm.");
@@ -1936,7 +1936,7 @@ mod tests {
         form.fields.replace(COMMENT, "  my secret tag  ");
         let record = form.record().unwrap();
         assert_eq!(record.comment, "my secret tag");
-        assert!(!serechat::card_json(&record.character()).contains("secret"), "never in a card");
+        assert!(!openrp_core::card_json(&record.character()).contains("secret"), "never in a card");
     }
 
     #[test]

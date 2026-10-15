@@ -6,7 +6,7 @@
 use std::fmt::Write as _;
 
 use serde_json::json;
-use serechat::{Role, Session};
+use openrp_core::{Role, Session};
 
 use super::tools::{self, Part};
 
@@ -91,7 +91,7 @@ pub fn jsonl(session: &Session, world: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use serechat::{Player, StoredMessage};
+    use openrp_core::{Player, StoredMessage};
 
     use super::*;
 

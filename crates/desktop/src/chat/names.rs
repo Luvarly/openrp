@@ -11,7 +11,7 @@
 //!    one of theirs all part of it), ignoring "the", "a" and "an". Two
 //!    candidates mean no match: guessing would merge different people.
 
-use serechat::{CastMember, Player};
+use openrp_core::{CastMember, Player};
 
 /// Words that never tell names apart.
 const FILLER: [&str; 3] = ["the", "a", "an"];

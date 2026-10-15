@@ -27,7 +27,7 @@ mod turns;
 use std::sync::atomic::Ordering;
 
 use arboard::Clipboard;
-use serechat::{CastMember, Error, Model, Player, Role, Session, SessionSummary, StoredMessage, Usage, new_id, unix_now};
+use openrp_core::{CastMember, Error, Model, Player, Role, Session, SessionSummary, StoredMessage, Usage, new_id, unix_now};
 use winit::event::KeyEvent;
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 
@@ -551,9 +551,6 @@ pub struct Chat {
     model: String,
     /// Model for work beside the story; `None` uses `model`.
     utility_model: Option<String>,
-    /// Replies come from a custom provider: it lists no prices, so costs
-    /// would read $0 and are not shown.
-    custom: bool,
     reasoning: Reasoning,
     reasoning_view: ReasoningView,
     menu: Option<Menu>,
@@ -636,7 +633,6 @@ impl Chat {
             models_error: None,
             model: model.unwrap_or_else(|| DEFAULT_MODEL.to_owned()),
             utility_model: None,
-            custom: false,
             reasoning,
             reasoning_view: ReasoningView::default(),
             menu: None,
@@ -718,9 +714,8 @@ impl Chat {
         self.utility_model = model;
     }
 
-    /// Tells the settings page which providers are saved and which is in use.
+    /// Tells the settings page which provider is saved.
     pub fn set_provider(&mut self, provider: Provider) {
-        self.custom = provider.custom;
         self.settings.set_provider(provider);
     }
 
@@ -1106,17 +1101,17 @@ impl Chat {
     /// Stores the worlds, characters and personas read from disk.
     pub fn library_loaded(
         &mut self,
-        worlds: Vec<serechat::World>,
-        characters: Vec<serechat::Character>,
-        personas: Vec<serechat::Persona>,
-        portraits: serechat::Portraits,
+        worlds: Vec<openrp_core::World>,
+        characters: Vec<openrp_core::Character>,
+        personas: Vec<openrp_core::Persona>,
+        portraits: openrp_core::Portraits,
     ) {
         self.library.loaded(worlds, characters, personas, portraits);
     }
 
     /// Character cards were read: they join the library (see
     /// [`LibraryView::imported`]), and files that could not be read are told.
-    pub fn cards_imported(&mut self, characters: Vec<serechat::Character>, errors: Vec<String>, actions: &mut Vec<Action>) {
+    pub fn cards_imported(&mut self, characters: Vec<openrp_core::Character>, errors: Vec<String>, actions: &mut Vec<Action>) {
         if !characters.is_empty() && self.page != Page::Library(Kind::Character) {
             self.show(Page::Library(Kind::Character));
         }
@@ -1127,7 +1122,7 @@ impl Chat {
     }
 
     /// A lorebook was read for the library's open form.
-    pub fn lore_imported(&mut self, result: Result<Vec<serechat::LoreEntry>, String>) {
+    pub fn lore_imported(&mut self, result: Result<Vec<openrp_core::LoreEntry>, String>) {
         self.library.lore_imported(result);
     }
 
@@ -1236,7 +1231,7 @@ impl Chat {
     }
 
     /// Content-search results for Spotlight.
-    pub fn search_results(&mut self, generation: u64, hits: Vec<serechat::SearchHit>) {
+    pub fn search_results(&mut self, generation: u64, hits: Vec<openrp_core::SearchHit>) {
         if let Some(spotlight) = &mut self.spotlight {
             spotlight.set_hits(generation, hits);
         }
@@ -1475,7 +1470,6 @@ impl Chat {
         let t = p.theme;
         let bar = Rect::new(main.x, 0.0, main.w, theme::HEADER_HEIGHT);
         p.rect(Rect::new(bar.x, bar.bottom() - 1.0, bar.w, 1.0), t.border, 0.0);
-        let custom = self.custom;
         let conversation = self.current();
         let (tokens, cost) = (conversation.tokens(), conversation.cost());
         let (world, title) = (conversation.world.clone(), conversation.title.clone());
@@ -1490,10 +1484,11 @@ impl Chat {
 
         let mut right = bar.right() - 16.0;
         if tokens > 0 {
-            let spent = if custom {
-                format!("{} tokens", group_digits(tokens))
-            } else {
+            // Providers rarely list prices: the cost shows once there is one.
+            let spent = if cost > 0.0 {
                 format!("{} tokens  ·  {}", group_digits(tokens), format_cost(cost))
+            } else {
+                format!("{} tokens", group_digits(tokens))
             };
             let spent = p.layout(&spent, theme::SMALL, None);
             right -= spent.width();
@@ -1584,7 +1579,7 @@ pub fn format_cost(usd: f64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use serechat::{Completion, InputItem, StreamEvent, ToolCall};
+    use openrp_core::{Completion, InputItem, StreamEvent, ToolCall};
 
     use super::stream::input_items;
     use super::*;
@@ -2072,7 +2067,7 @@ mod tests {
             ..CastMember::default()
         });
         let job = start(&mut chat, "I call out.");
-        assert!(job.tools && job.tool_choice == Some(serechat::ToolChoice::Required) && job.instructions.contains("There is no narrator"));
+        assert!(job.tools && job.tool_choice == Some(openrp_core::ToolChoice::Required) && job.instructions.contains("There is no narrator"));
 
         // Speech shows while its call is written.
         chat.stream_event(job.conversation, job.stream, StreamEvent::Text("Leaves rustle.".into()));
@@ -2207,7 +2202,7 @@ mod tests {
         let speak = ToolCall { call_id: "s2".into(), name: tools::SPEAK.into(), arguments: skipped.into() };
         let repair = start_over(&mut chat, &job, Completion { tool_calls: vec![speak], ..Completion::default() }).expect("a repair");
         assert!(!chat.current().cast.iter().any(|m| m.name == "Kicker"));
-        assert_eq!(repair.tool_choice, Some(serechat::ToolChoice::Function(tools::CREATE_CHARACTER)));
+        assert_eq!(repair.tool_choice, Some(openrp_core::ToolChoice::Function(tools::CREATE_CHARACTER)));
         let items = input_items(&repair.history);
         assert!(
             items.iter().any(|i| matches!(i, InputItem::ToolOutput { output, .. } if output.contains("Not in the cast with a description: Kicker")))
@@ -2222,7 +2217,7 @@ mod tests {
         assert!(start_over(&mut chat, &repair, Completion { tool_calls: vec![described], ..Completion::default() }).is_none());
         assert!(chat.current().cast.iter().any(|m| m.name == "Kicker" && m.description == "A clone trooper."));
         let next = start(&mut chat, "Good.");
-        assert_eq!(next.tool_choice, Some(serechat::ToolChoice::Required), "back to normal");
+        assert_eq!(next.tool_choice, Some(openrp_core::ToolChoice::Required), "back to normal");
 
         // A model that never describes them gives up after the bounded rounds.
         let skipped = r#"{"introduce":[],"lines":[{"character":"Echo","text":"Hey."}]}"#;

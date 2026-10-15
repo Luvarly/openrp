@@ -9,7 +9,7 @@ use std::fmt::Write as _;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use serechat::{Error, StreamEvent, ToolChoice, Usage};
+use openrp_core::{Error, StreamEvent, ToolChoice, Usage};
 
 use super::stream::SendJob;
 use super::{Chat, Load};
@@ -163,7 +163,7 @@ impl Chat {
 
 #[cfg(test)]
 mod tests {
-    use serechat::{Completion, Player, StreamEvent, ToolChoice};
+    use openrp_core::{Completion, Player, StreamEvent, ToolChoice};
 
     use super::*;
     use crate::chat::Reasoning;
@@ -187,7 +187,7 @@ mod tests {
         chat.stream_event(job.conversation, job.stream, StreamEvent::Text(" Gale: I ask about the".into()));
         chat.stream_event(job.conversation, job.stream, StreamEvent::Text(" mines.".into()));
         assert_eq!(chat.composer.text(), "Gale: I ask about the mines.");
-        let usage = serechat::Usage::new(100, 10);
+        let usage = openrp_core::Usage::new(100, 10);
         chat.stream_event(job.conversation, job.stream, StreamEvent::Completed(Completion { usage, ..Completion::default() }));
         assert!(!chat.stream_end(job.conversation, job.stream, Ok(true), &mut actions));
         assert_eq!(chat.composer.text(), "I ask about the mines.", "the name it led with is dropped");

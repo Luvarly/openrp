@@ -54,16 +54,12 @@ impl Tab {
     }
 }
 
-/// What the provider tab knows of the saved providers.
+/// What the provider tab knows of the saved provider.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Provider {
-    /// Replies come from the custom provider rather than SereChat.
-    pub custom: bool,
-    /// Signed in to SereChat.
-    pub signed_in: bool,
-    /// The custom provider's API root; empty when none was saved.
+    /// The provider's API root; empty when none was saved.
     pub base_url: String,
-    /// A key is saved for the custom provider.
+    /// A key is saved for the provider.
     pub has_key: bool,
 }
 
@@ -74,7 +70,7 @@ pub struct SettingsView {
     /// Content height measured last frame, for clamping the scroll.
     content_h: f32,
     provider: Provider,
-    /// The custom provider's address and key, as being edited.
+    /// The provider's address and key, as being edited.
     form: ProviderForm,
 }
 
@@ -85,7 +81,7 @@ impl Default for SettingsView {
 }
 
 impl SettingsView {
-    /// Shows `provider`, starting the custom provider form afresh from it.
+    /// Shows `provider`, starting the provider form afresh from it.
     pub fn set_provider(&mut self, provider: Provider) {
         self.form = ProviderForm::new(&provider.base_url, provider.has_key);
         self.provider = provider;
@@ -111,10 +107,10 @@ impl SettingsView {
         (self.tab == Tab::Provider).then(|| self.form.caret()).flatten()
     }
 
-    /// Asks to use the custom provider entered, if the form accepts it.
+    /// Asks to use the provider entered, if the form accepts it.
     fn connect(&mut self, actions: &mut Vec<Action>) {
         if let Some((base_url, api_key)) = self.form.submit() {
-            actions.push(Action::ConnectCustom { base_url, api_key });
+            actions.push(Action::Connect { base_url, api_key });
         }
     }
 
@@ -206,20 +202,15 @@ impl SettingsView {
                 y += tip.height();
             }
             Tab::Usage => {
-                // A custom provider lists no prices: a total would leave its spending out.
-                let custom = self.provider.custom;
-                let note = if custom {
-                    "Totals across every session saved on this device. Costs are not shown with a custom provider."
-                } else {
-                    "Totals across every session saved on this device."
-                };
-                y = section(p, x, y, "Usage", note);
+                // Providers rarely list prices: costs show only once something cost money.
+                let unpriced = totals.cost <= 0.0;
+                y = section(p, x, y, "Usage", "Totals across every session saved on this device.");
                 let stats = [
                     ("Total spent", format_cost(totals.cost)),
                     ("Tokens", group_digits(totals.tokens)),
                     ("Sessions", group_digits(totals.sessions as u64)),
                 ];
-                for (i, (label, value)) in stats.iter().skip(usize::from(custom)).enumerate() {
+                for (i, (label, value)) in stats.iter().skip(usize::from(unpriced)).enumerate() {
                     let stat = Rect::new(x + i as f32 * (card_w + 12.0), y, card_w, 84.0);
                     p.bordered(stat, t.surface, theme::RADIUS, 1.0, t.border);
                     p.label(label, theme::CAPTION, stat.x + 16.0, stat.y + 16.0, t.text_faint);
@@ -228,40 +219,20 @@ impl SettingsView {
                 y += 84.0;
             }
             Tab::Provider => {
-                y = section(p, x, y, "Provider", "Where replies come from. Your stories stay on this device either way.");
-                let row = group(p, x, y, width);
-                let provider = &self.provider;
-                let (description, label, style, action) = match (provider.custom, provider.signed_in) {
-                    (false, _) => ("Signed in on this device. Signing out keeps your stories.", "Sign out", ButtonStyle::Danger, Action::SignOut),
-                    (true, true) => ("Signed in, not in use.", "Use SereChat", ButtonStyle::Secondary, Action::UseSereChat),
-                    (true, false) => ("Sign in with your SereChat account in the browser.", "Sign in", ButtonStyle::Secondary, Action::UseSereChat),
-                };
-                setting_row(p, row, "SereChat", description);
-                if !provider.custom {
-                    in_use(p, "SereChat", row.x + 16.0, row.y + 15.0);
-                }
-                if button(p, ui, control(row, 116.0), label, style, true) {
-                    actions.push(action);
-                }
-                y += ROW_H + 12.0;
-
-                let (custom, has_key) = (provider.custom, provider.has_key);
+                y = section(p, x, y, "Provider", "Where replies come from. Your stories stay on this device.");
                 let inner = width - 32.0;
                 let form_h = self.form.height(p, inner);
                 let card = Rect::new(x, y, width, 68.0 + form_h + 20.0 + 30.0 + 16.0);
                 p.bordered(card, t.surface, theme::RADIUS, 1.0, t.border);
-                setting_row(p, card, "Custom provider", "Any OpenAI-compatible API, through Chat Completions.");
-                if custom {
-                    in_use(p, "Custom provider", card.x + 16.0, card.y + 15.0);
-                }
+                setting_row(p, card, "OpenAI-compatible API", "Any provider or local server that speaks Chat Completions.");
                 self.form.draw(p, ui, card.x + 16.0, card.y + 68.0, inner);
                 let buttons_y = card.y + 68.0 + form_h + 20.0;
                 let save = Rect::new(card.right() - 16.0 - 120.0, buttons_y, 120.0, 30.0);
-                if button(p, ui, save, if custom { "Save" } else { "Save and use" }, ButtonStyle::Primary, true) {
+                if button(p, ui, save, "Save", ButtonStyle::Primary, true) {
                     self.connect(actions);
                 }
                 let forget = Rect::new(save.x - 8.0 - 104.0, buttons_y, 104.0, 30.0);
-                if has_key && button(p, ui, forget, "Forget key", ButtonStyle::Danger, true) {
+                if self.provider.has_key && button(p, ui, forget, "Forget key", ButtonStyle::Danger, true) {
                     actions.push(Action::ForgetKey);
                 }
                 y += card.h + SECTION_GAP;
@@ -329,16 +300,6 @@ fn tabs(p: &mut Painter, ui: &mut Ui, mut x: f32, bar: Rect, open: Tab) -> Optio
         x += cell.w;
     }
     clicked
-}
-
-/// A small "In use" tag after the row title `title` drawn at `(x, y)`.
-fn in_use(p: &mut Painter, title: &str, x: f32, y: f32) {
-    let t = p.theme;
-    let after = x + p.layout(title, theme::LABEL, None).width() + 8.0;
-    let tag = p.layout("In use", theme::CAPTION, None);
-    let rect = Rect::new(after, y - 1.0, tag.width() + 12.0, 18.0);
-    p.rect(rect, fade(t.accent, 0.16), theme::RADIUS_SM);
-    p.text(&tag, rect.x + 6.0, rect.y + (rect.h - tag.height()) * 0.5, t.accent);
 }
 
 /// Section heading with a description; returns where its content starts.

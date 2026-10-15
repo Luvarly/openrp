@@ -4,7 +4,7 @@
 use winit::window::CursorIcon;
 
 use super::stream::MAX_RETRIES;
-use serechat::{CastMember, Player, Role};
+use openrp_core::{CastMember, Player, Role};
 
 use super::names;
 use super::tools::Part;

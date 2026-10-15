@@ -6,8 +6,8 @@ use std::time::Duration;
 /// Convenience alias for results produced by this crate.
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-/// Everything that can go wrong while talking to SereChat or touching the
-/// local configuration.
+/// Everything that can go wrong while talking to the provider or touching
+/// the local configuration.
 #[derive(Debug)]
 pub enum Error {
     /// The request never produced an HTTP response: DNS, TCP, TLS or a
@@ -48,9 +48,6 @@ pub enum Error {
     },
     /// The user's home directory could not be determined.
     NoHomeDir,
-    /// The browser sign-in did not finish: declined, timed out, cancelled or
-    /// answered wrongly. Holds what to tell the user.
-    SignIn(String),
     /// A file was saved by a newer version of OpenRP, in a format this one
     /// does not know; it is left untouched rather than rewritten.
     Newer {
@@ -60,14 +57,11 @@ pub enum Error {
 }
 
 impl Error {
-    /// Returns `true` when the server rejected our credentials, meaning the
-    /// user has to sign in again: a `401` (after a refresh), a refresh token
-    /// SereChat no longer takes (`invalid_grant`: revoked, or unused for 60
-    /// days), or a sign-in without a scope the app now needs
-    /// (`insufficient_scope`), which a new consent asks for.
+    /// Returns `true` when the server rejected the API key (a `401`), so the
+    /// user has to enter it again.
     #[must_use]
     pub fn is_unauthorized(&self) -> bool {
-        matches!(self, Self::Api { status: 401, .. }) || matches!(self.code(), Some("invalid_grant" | "insufficient_scope"))
+        matches!(self, Self::Api { status: 401, .. })
     }
 
     /// The machine-readable API error code, if any.
@@ -110,7 +104,7 @@ impl Error {
             ),
             Self::Api { status, .. } => *status == 429 || *status >= 500,
             Self::Response { code, .. } => matches!(code.as_deref(), Some("server_error" | "rate_limit_exceeded") | None),
-            Self::Decode(_) | Self::Config { .. } | Self::NoHomeDir | Self::SignIn(_) | Self::Newer { .. } => false,
+            Self::Decode(_) | Self::Config { .. } | Self::NoHomeDir | Self::Newer { .. } => false,
         }
     }
 
@@ -135,7 +129,7 @@ impl fmt::Display for Error {
         match self {
             Self::Transport(e) => write!(f, "network error: {e}"),
             Self::Api { status, message, .. } => write!(f, "{message} (HTTP {status})"),
-            Self::Response { message, .. } | Self::SignIn(message) => f.write_str(message),
+            Self::Response { message, .. } => f.write_str(message),
             Self::Decode(e) => write!(f, "malformed JSON: {e}"),
             // Data that is not what it should be says why in a sentence.
             Self::Io(e) if e.kind() == std::io::ErrorKind::InvalidData && e.get_ref().is_some() => write!(f, "{e}"),
@@ -153,7 +147,7 @@ impl std::error::Error for Error {
             Self::Transport(e) => Some(e.as_ref()),
             Self::Decode(e) => Some(e),
             Self::Io(e) => Some(e),
-            Self::Api { .. } | Self::Response { .. } | Self::Config { .. } | Self::NoHomeDir | Self::SignIn(_) | Self::Newer { .. } => None,
+            Self::Api { .. } | Self::Response { .. } | Self::Config { .. } | Self::NoHomeDir | Self::Newer { .. } => None,
         }
     }
 }
@@ -193,8 +187,7 @@ mod tests {
         assert!(response("context_length_exceeded").is_context_overflow() && !response("context_length_exceeded").is_retryable());
         assert!(api(503).is_retryable() && api(429).is_retryable() && !api(402).is_retryable() && !api(401).is_retryable());
         let coded = |status, code: &str| Error::Api { status, code: Some(code.into()), message: String::new(), retry_after: None };
-        assert!(api(401).is_unauthorized() && coded(400, "invalid_grant").is_unauthorized() && coded(403, "insufficient_scope").is_unauthorized());
-        assert!(!api(403).is_unauthorized() && !coded(402, "insufficient_balance").is_unauthorized());
+        assert!(api(401).is_unauthorized() && !api(403).is_unauthorized() && !coded(402, "insufficient_balance").is_unauthorized());
         assert!(Error::Io(std::io::ErrorKind::ConnectionReset.into()).is_retryable());
         assert!(!Error::Io(std::io::Error::other("attachment missing")).is_retryable());
         assert!(Error::Transport(Box::new(ureq::Error::HostNotFound)).is_retryable(), "offline");

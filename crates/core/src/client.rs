@@ -1,10 +1,9 @@
-//! Blocking HTTP client for the SereChat API, or for an OpenAI-compatible
-//! provider spoken to with Chat Completions (see `completions.rs`).
+//! Blocking HTTP client for an OpenAI-compatible provider, spoken to with
+//! Chat Completions (see `completions.rs`).
 //!
 //! Every call blocks the calling thread; the desktop app runs them on worker
 //! threads so the render loop never waits on the network.
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use serde::Deserialize;
@@ -12,10 +11,7 @@ use serde_json::Value;
 use ureq::http::Response;
 
 use crate::error::{Error, Result};
-use crate::oauth::OAuth;
 
-/// Production API origin.
-pub const BASE_URL: &str = "https://serechat.com";
 /// Longest a response body may take to arrive, streams included.
 const BODY_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 /// Longest wait a `Retry-After` header is trusted with.
@@ -25,14 +21,10 @@ const MAX_RETRY_AFTER: Duration = Duration::from_secs(10 * 60);
 #[derive(Clone)]
 pub struct Client {
     agent: ureq::Agent,
+    /// The provider's API root: the part before `/chat/completions`.
     base: String,
-    /// A custom provider's API key.
+    /// The provider's API key.
     token: Option<String>,
-    /// The SereChat sign-in, shared by every clone (see `oauth.rs`).
-    pub(crate) oauth: Option<Arc<OAuth>>,
-    /// An OpenAI-compatible provider: `base` is its API root (the part
-    /// before `/chat/completions`), and replies use Chat Completions.
-    pub(crate) custom: bool,
 }
 
 impl std::fmt::Debug for Client {
@@ -40,8 +32,7 @@ impl std::fmt::Debug for Client {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Client")
             .field("base", &self.base)
-            .field("custom", &self.custom)
-            .field("authenticated", &(self.token.is_some() || self.oauth.is_some()))
+            .field("authenticated", &self.token.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -96,10 +87,11 @@ impl Model {
 }
 
 impl Client {
-    /// Creates a client against [`BASE_URL`], not signed in; see
-    /// [`Client::signed_in`] and [`crate::SignIn`].
+    /// Creates a client for an OpenAI-compatible provider whose API root is
+    /// `base_url` (e.g. `https://openrouter.ai/api/v1`), authenticated with
+    /// `api_key` when there is one (local servers often need none).
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(base_url: &str, api_key: Option<String>) -> Self {
         let agent = ureq::Agent::config_builder()
             .http_status_as_error(false)
             .timeout_connect(Some(Duration::from_secs(15)))
@@ -111,15 +103,7 @@ impl Client {
             .user_agent(concat!("openrp/", env!("CARGO_PKG_VERSION")))
             .build()
             .into();
-        Self { agent, base: BASE_URL.to_owned(), token: None, oauth: None, custom: false }
-    }
-
-    /// Creates a client for an OpenAI-compatible provider whose API root is
-    /// `base_url` (e.g. `https://openrouter.ai/api/v1`), authenticated with
-    /// `api_key` when there is one (local servers often need none).
-    #[must_use]
-    pub fn custom(base_url: &str, api_key: Option<String>) -> Self {
-        Self { base: base_url.trim_end_matches('/').to_owned(), custom: true, token: api_key, ..Self::new() }
+        Self { agent, base: base_url.trim_end_matches('/').to_owned(), token: api_key }
     }
 
     /// Lists the available chat models.
@@ -131,10 +115,8 @@ impl Client {
         struct Body {
             data: Vec<Model>,
         }
-        // SereChat lists its models to anyone; other providers want the key.
-        let path = if self.custom { "/models" } else { "/v1/models" };
-        let mut request = self.agent.get(format!("{}{path}", self.base));
-        if let Some(token) = self.token.as_deref().filter(|_| self.custom) {
+        let mut request = self.agent.get(format!("{}/models", self.base));
+        if let Some(token) = &self.token {
             request = request.header("Authorization", format!("Bearer {token}"));
         }
         let response = request.call()?;
@@ -146,43 +128,18 @@ impl Client {
     /// after checking the status. Used by streaming calls that consume the
     /// body incrementally.
     pub(crate) fn post(&self, path: &str, body: &Value) -> Result<Response<ureq::Body>> {
-        let body = serde_json::to_vec(body)?;
-        let send = |token: Option<&str>| -> Result<Response<ureq::Body>> {
-            let mut request = self.agent.post(format!("{}{path}", self.base)).content_type("application/json");
-            if let Some(token) = token {
-                request = request.header("Authorization", format!("Bearer {token}"));
-            }
-            Ok(request.send(&body[..])?)
-        };
-        let token = self.bearer(None)?;
-        let mut response = send(token.as_deref())?;
-        // An access token can be revoked or expire early: refreshed, the
-        // request is tried once more.
-        if response.status() == 401 && self.oauth.is_some() {
-            response = send(self.bearer(token.as_deref())?.as_deref())?;
+        let mut request = self.agent.post(format!("{}{path}", self.base)).content_type("application/json");
+        if let Some(token) = &self.token {
+            request = request.header("Authorization", format!("Bearer {token}"));
         }
-        check_status(response)
-    }
-
-    /// The bearer token for a request: the custom provider's key, or
-    /// SereChat's access token, refreshed first when it is about to expire
-    /// or is `rejected` (see [`OAuth::access`]).
-    pub(crate) fn bearer(&self, rejected: Option<&str>) -> Result<Option<String>> {
-        match &self.oauth {
-            Some(oauth) => oauth.access(self, rejected).map(Some),
-            None => Ok(self.token.clone()),
-        }
-    }
-
-    /// POSTs a form to one of SereChat's OAuth endpoints and checks the status.
-    pub(crate) fn post_form(&self, path: &str, form: &[(&str, &str)]) -> Result<Response<ureq::Body>> {
-        check_status(self.agent.post(format!("{}{path}", self.base)).send_form(form.iter().copied())?)
+        check_status(request.send(&serde_json::to_vec(body)?[..])?)
     }
 }
 
 impl Default for Client {
+    /// A client with no provider yet: every request fails.
     fn default() -> Self {
-        Self::new()
+        Self::new("", None)
     }
 }
 
@@ -218,8 +175,7 @@ fn parse_retry_after(value: &str) -> Option<Duration> {
 }
 
 /// Extracts `(code, message)` from an error body. Accepts both
-/// `{"error": {"code", "message"}}` and flat `{"error": "code", "message"}`,
-/// as OAuth endpoints send it (with `error_description`).
+/// `{"error": {"code", "message"}}` and flat `{"error": "code", "message"}`.
 pub(crate) fn parse_error_body(text: &str) -> (Option<String>, Option<String>) {
     let Ok(value) = serde_json::from_str::<Value>(text) else {
         return (None, None);
@@ -227,7 +183,7 @@ pub(crate) fn parse_error_body(text: &str) -> (Option<String>, Option<String>) {
     let error = value.get("error").unwrap_or(&value);
     let field = |v: &Value, key: &str| v.get(key).and_then(Value::as_str).map(str::to_owned);
     let code = field(error, "code").or_else(|| error.as_str().map(str::to_owned));
-    let message = field(error, "message").or_else(|| field(&value, "message")).or_else(|| field(&value, "error_description"));
+    let message = field(error, "message").or_else(|| field(&value, "message"));
     (code, message)
 }
 
@@ -261,8 +217,6 @@ mod tests {
         assert_eq!(parse_error_body(nested), (Some("invalid_code".into()), Some("Wrong code".into())));
         let flat = r#"{"error":"authorization_pending","message":"Not yet"}"#;
         assert_eq!(parse_error_body(flat), (Some("authorization_pending".into()), Some("Not yet".into())));
-        let oauth = r#"{"error":"invalid_grant","error_description":"Refresh token expired"}"#;
-        assert_eq!(parse_error_body(oauth), (Some("invalid_grant".into()), Some("Refresh token expired".into())));
         assert_eq!(parse_error_body("<html>"), (None, None));
     }
 

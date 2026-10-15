@@ -39,7 +39,7 @@
 use std::fmt::Write as _;
 
 use serde_json::{Value, json};
-use serechat::{CastMember, Player, Role, StoredMessage, ToolCall, ToolResult, new_id};
+use openrp_core::{CastMember, Player, Role, StoredMessage, ToolCall, ToolResult, new_id};
 
 use super::names::{self, Who};
 
@@ -386,7 +386,7 @@ fn update(cast: &mut [CastMember], player: Option<&Player>, character: &str, nam
     let mut done = Vec::new();
     if !name.is_empty() && member.name != name {
         let old = member.name.clone();
-        serechat::rename(&mut member.name, &mut member.aliases, name);
+        openrp_core::rename(&mut member.name, &mut member.aliases, name);
         done.push(format!("{old} is now called {name}"));
     }
     if !description.is_empty() && member.description != description {
@@ -929,7 +929,7 @@ mod tests {
             let output = run(&call, &mut cast, &mut scene, &mut memories, None);
             reply.tool_calls.push(ToolResult { call, output });
         }
-        reply.change = serechat::StoryChange::between(&cast_before, &scene_before, &cast, &scene, &memories[known..]);
+        reply.change = openrp_core::StoryChange::between(&cast_before, &scene_before, &cast, &scene, &memories[known..]);
         assert_eq!(
             reply_parts(&reply),
             [
@@ -992,7 +992,7 @@ mod tests {
         assert!(cast[1].present && !cast[0].present);
         let mut reply = StoredMessage::new(Role::Assistant, String::new());
         let before = vec![CastMember { name: "Alice".into(), ..cast[1].clone() }];
-        reply.change = serechat::StoryChange::between(&before, "", &cast[1..], "", &[]);
+        reply.change = openrp_core::StoryChange::between(&before, "", &cast[1..], "", &[]);
         assert_eq!(reply_parts(&reply), [Part::Note("Alice is now called Queen Alice".into())], "the rename shows");
 
         // Errors name the cast; the user's character is not the model's.
